@@ -310,6 +310,8 @@ QStringList parseWrite(const Snapshot& s, const QString& text, QString* error) {
     }
   } else values << text;
   if (!s.choices.isEmpty()) {
+    // An empty editor selects nothing, even when a state's label is blank.
+    if (text.trimmed().isEmpty()) { *error = "Choose an enum label or a valid enum index."; return {}; }
     int index = s.choices.indexOf(text);
     bool ok = true;
     if (index < 0) index = text.toInt(&ok);
@@ -323,7 +325,7 @@ QStringList parseWrite(const Snapshot& s, const QString& text, QString* error) {
 QString enumWriteText(const QStringList& choices, int index) {
   const auto number = QString::number(index);
   if (!choices.contains(number)) return number;
-  if (index >= 0 && index < choices.size() && choices.indexOf(choices[index]) == index) return choices[index];
+  if (index >= 0 && index < choices.size() && !choices[index].trimmed().isEmpty() && choices.indexOf(choices[index]) == index) return choices[index];
   return {};
 }
 std::deque<WriteRecord>& writeLog() { static std::deque<WriteRecord> log; return log; }
