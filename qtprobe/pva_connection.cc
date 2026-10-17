@@ -339,8 +339,11 @@ public:
         s.host = QString::fromStdString(channel->getRemoteAddress());
         monitorRequester = std::make_shared<MonitorRequester>(inbox, limit, epoch);
         monitor = channel->createMonitor(monitorRequester, pvd::CreateRequest::create()->createRequest("field()"));
-        putRequester = std::make_shared<PutRequester>(inbox, epoch);
-        put = channel->createChannelPut(putRequester, pvd::CreateRequest::create()->createRequest("field(value)"));
+        // Read-only channels (--read-only, --info, Record fields) create no put operation on the server.
+        if (!owner.readOnly()) {
+          putRequester = std::make_shared<PutRequester>(inbox, epoch);
+          put = channel->createChannelPut(putRequester, pvd::CreateRequest::create()->createRequest("field(value)"));
+        }
         break;
       case Event::Disconnected:
         clearOperations(); s.connected = s.readable = s.writable = false;

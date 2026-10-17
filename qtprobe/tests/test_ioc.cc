@@ -199,6 +199,8 @@ private slots:
       const double original = ro.snapshot.number; QSignalSpy results(&ro, &Channel::writeFinished);
       ro.write("99"); QCOMPARE(results.size(), 1); QVERIFY(!results[0][0].toBool());
       QTest::qWait(150); QCOMPARE(ro.snapshot.number, original);
+      // PVA read-only channels never set up a put operation, so they are not writable.
+      if (provider == "pva") QVERIFY(!ro.snapshot.writable);
       { Channel peer({prefix + "number", provider}); peer.start(); QTRY_VERIFY(peer.snapshot.hasValue); }
       ro.stop(); QVERIFY(!ro.snapshot.connected); ro.start(); QTRY_VERIFY(ro.snapshot.hasValue);
     }
