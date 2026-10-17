@@ -57,7 +57,9 @@ files, and built EPICS Base. Qt Test is used by tests. The build discovers
 Base at `/usr/local/oag/base`, a sibling `epics-base`, or `$HOME/epics/base`;
 override with `EPICS_BASE=/path/to/base EPICS_HOST_ARCH=linux-x86_64`.
 Qt is discovered with the system `pkg-config` or `qmake`; set `QT_VERSION`,
-`PKG_CONFIG`, `QMAKE`, `MOC` or `RCC` for other installations.
+`PKG_CONFIG`, `QMAKE`, `QMAKE6`, `MOC` or `RCC` for other installations. On
+Linux the build uses `/usr/bin/pkg-config` and the distribution's `qmake`, so a
+Conda environment earlier in `PATH` cannot select Conda's Qt.
 If Base has pvAccess/pvData, PVA is enabled automatically. CA-only builds report
 an explicit error for `pva://` names. Legacy Probe additionally requires Motif,
 Xt and X11. QtProbe does not link Motif.

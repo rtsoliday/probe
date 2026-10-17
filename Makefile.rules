@@ -55,7 +55,15 @@ ifneq ($(shell nm -u $(EPICS_LIB_DIR)/libCom.a 2>/dev/null | sed -n '/ U _\{0,1\
 EPICS_SYS_LIBS += -lreadline
 endif
 
+ifeq ($(OS),Linux)
+# Like PKG_CONFIG, use the distribution's qmake so a Conda (or other) qmake
+# earlier in PATH cannot select its Qt. Set QMAKE or QMAKE6 for another Qt.
+QMAKE6 ?= $(firstword $(wildcard /usr/bin/qmake6 /usr/lib64/qt6/bin/qmake /usr/lib/qt6/bin/qmake))
+QMAKE5 := $(firstword $(wildcard /usr/bin/qmake-qt5 /usr/lib64/qt5/bin/qmake /usr/lib/qt5/bin/qmake /usr/bin/qmake))
+else
 QMAKE6 ?= qmake6
+QMAKE5 := qmake
+endif
 QT_VERSION ?= $(if $(filter Windows,$(OS)),6,$(if $(or $(shell $(PKG_CONFIG) --exists Qt6Widgets 2>/dev/null && echo yes),$(shell $(QMAKE6) -query QT_VERSION 2>/dev/null)),6,5))
 QT_PREFIX := Qt$(QT_VERSION)
 QT_CFLAGS = $(shell $(PKG_CONFIG) --cflags $(addprefix $(QT_PREFIX),Core Gui Widgets Network) 2>/dev/null)
@@ -67,7 +75,7 @@ QT_LIBEXEC := $(shell $(PKG_CONFIG) --variable=libexecdir $(QT_PREFIX)Core 2>/de
 HAVE_QT := $(shell $(PKG_CONFIG) --exists $(QT_PREFIX)Widgets 2>/dev/null && echo 1)
 # Qt 6 distribution SDKs sometimes provide qmake6 but no pkg-config files.
 ifeq ($(HAVE_QT),)
-QMAKE ?= $(if $(filter 6,$(QT_VERSION)),$(QMAKE6),qmake)
+QMAKE ?= $(if $(filter 6,$(QT_VERSION)),$(QMAKE6),$(QMAKE5))
 QT_HEADERS := $(shell $(QMAKE) -query QT_INSTALL_HEADERS 2>/dev/null)
 QT_LIBRARY_DIR := $(shell $(QMAKE) -query QT_INSTALL_LIBS 2>/dev/null)
 ifneq ($(wildcard $(QT_HEADERS)/QtWidgets/QApplication),)
