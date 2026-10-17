@@ -311,6 +311,22 @@ private slots:
     QTRY_COMPARE(n.snapshot.values[0], QString("-9223372036854775808"));
 #endif
   }
+  void enumLabelsReadingAsIndices() {
+    for (const auto& provider : providers()) {
+      // State "4" is index 2 and label "2" is index 1: the state list, Readback and Undo select the intended state.
+      Options options; options.provider = provider; writeLog().clear();
+      Inspector gain(Address::parse(prefix + "gain", provider), options); gain.show(); auto* channel = gain.channel();
+      QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.hasValue && channel->snapshot.writable && channel->snapshot.choices.size() == 4, 10000);
+      gain.refresh(); QCOMPARE(channel->snapshot.number, 1.0);
+      auto* undo = gain.findChild<QPushButton*>("undoWriteButton"); auto* write = gain.findChild<QPushButton*>("writeButton");
+      emit gain.findChild<QComboBox*>("enumChoice")->activated(2); write->click();
+      QTRY_COMPARE(channel->snapshot.number, 2.0); QTRY_VERIFY(undo->isEnabled());
+      undo->click(); QTRY_COMPARE(channel->snapshot.number, 1.0); QTRY_COMPARE(writeLog().size(), size_t(2));
+      gain.findChild<QPushButton*>("useReadbackButton")->click(); QTRY_VERIFY(write->isEnabled()); write->click();
+      QTRY_COMPARE(writeLog().size(), size_t(3)); QVERIFY(writeLog().back().ok); QTest::qWait(150); QCOMPARE(channel->snapshot.number, 1.0);
+      writeLog().clear();
+    }
+  }
   void reconnectAfterIocRestart() {
     std::vector<std::unique_ptr<Channel>> channels;
     for (const auto& provider : providers()) { auto c = std::make_unique<Channel>(Address{prefix + "number", provider}); c->start(); channels.push_back(std::move(c)); }

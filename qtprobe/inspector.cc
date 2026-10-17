@@ -361,7 +361,13 @@ Inspector::Inspector(Address address, Options options, QWidget* parent) : QWidge
   connect(input, &QLineEdit::returnPressed, this, [this] { if (put->isEnabled()) requestWrite(input->text()); });
   connect(undo, &QPushButton::clicked, this, [this] { if (hasUndo) requestWrite(undoValue); });
   connect(input, &QLineEdit::textEdited, this, [this] { lastWriteMessage.clear(); refreshWriteControls(); });
-  connect(enumChoice, QOverload<int>::of(&QComboBox::activated), this, [this](int i) { input->setText(QString::number(i)); lastWriteMessage.clear(); refreshWriteControls(); });
+  connect(enumChoice, QOverload<int>::of(&QComboBox::activated), this, [this](int i) {
+    // Stage text that selects this state even when labels read as indices.
+    const auto text = enumWriteText(lastChoices, i);
+    if (text.isEmpty()) { lastWriteMessage = "This state cannot be entered: its label repeats and its index is another state's label."; lastWriteOK = false; }
+    else { input->setText(text); lastWriteMessage.clear(); }
+    refreshWriteControls();
+  });
   connect(useReadback, &QPushButton::clicked, this, [this] {
     input->setText(channel_->snapshot.editText());
     lastWriteMessage.clear(); input->setFocus(); input->selectAll(); refreshWriteControls();
@@ -566,7 +572,7 @@ void Inspector::refreshWriteControls() {
   undo->setToolTip(hasUndo ? "Restore " + preview(undoValue) + ", the value before your last write" : "No write to undo yet");
   processButton->setVisible(!channel_->readOnly() && s.processable);
   processButton->setEnabled(s.connected && !channel_->writePending() && !channel_->writeUncertain());
-  useReadback->setEnabled(writable && s.readable && (!s.array || !s.truncated));
+  useReadback->setEnabled(writable && s.readable && (!s.array || !s.truncated) && (s.choices.isEmpty() || !s.editText().isEmpty()));
   useReadback->setToolTip(s.truncated ? "Readback is truncated; use a complete array for replacement writes." : "Copy the exact current readback into the value editor");
   QString message, tone = "muted";
   if (channel_->readOnly()) message = "Read-only session · writes are disabled.";

@@ -90,6 +90,16 @@ private slots:
     QCOMPARE(parseWrite(s, "Off", &error), QStringList{"0"}); QVERIFY(error.isEmpty());
     QCOMPARE(parseWrite(s, "1", &error), QStringList{"1"});
     parseWrite(s, "2", &error); QVERIFY(!error.isEmpty());
+    // Labels that read as numbers win over indices; staged text must still select the intended state.
+    s.choices = QStringList{"1", "2", "4", "8"}; s.hasValue = true;
+    QCOMPARE(parseWrite(s, "2", &error), QStringList{"1"});
+    for (int i = 0; i < 4; ++i) {
+      QCOMPARE(parseWrite(s, enumWriteText(s.choices, i), &error), QStringList{QString::number(i)});
+      s.values = QStringList{QString::number(i)}; QCOMPARE(parseWrite(s, s.editText(), &error), s.values);
+    }
+    QCOMPARE(enumWriteText(QStringList{"Off", "On"}, 1), QString("1"));
+    QCOMPARE(enumWriteText(QStringList{"x", "x", "1"}, 1), QString());
+    s.values.clear(); s.hasValue = false;
     s.choices.clear(); s.array = true; s.provider = "ca"; s.capacity = 3;
     QCOMPARE(parseWrite(s, "[1,2,3]", &error).size(), 3); QVERIFY(error.isEmpty());
     QCOMPARE(parseWrite(s, "[\"18446744073709551615\"]", &error)[0], QString("18446744073709551615"));

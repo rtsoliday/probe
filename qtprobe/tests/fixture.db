@@ -10,6 +10,7 @@ record(mbbo, "$(P)enum") {
   field(ZRST, "Off") field(ONST, "On") field(TWST, "Standby") field(VAL, "1")
   info(Q:group, {"$(P)group": {"+id": "qtprobe:test/Group:1.0", "mode": {"+channel": "VAL", "+trigger": "*"}}})
 }
+record(mbbo, "$(P)gain") { field(ZRST, "1") field(ONST, "2") field(TWST, "4") field(THST, "8") field(VAL, "1") field(PINI, "YES") }
 record(stringout, "$(P)text") { field(VAL, "hello") }
 record(longout, "$(P)integer") { field(VAL, "2147483647") }
 record(int64out, "$(P)int64") { field(VAL, "9223372036854775806") }

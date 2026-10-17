@@ -60,6 +60,8 @@ QString Snapshot::exactText() const {
 QString Snapshot::editText() const {
   if (longString) return text;
   if (array) return QString::fromUtf8(QJsonDocument(QJsonArray::fromStringList(values)).toJson(QJsonDocument::Compact));
+  bool ok; const int index = values.value(0).toInt(&ok);
+  if (!choices.isEmpty() && ok) return enumWriteText(choices, index);
   return values.value(0);
 }
 QString Snapshot::valueText(const QString& format) const {
@@ -315,6 +317,12 @@ QStringList parseWrite(const Snapshot& s, const QString& text, QString* error) {
     values = QStringList{QString::number(index)};
   }
   return values;
+}
+QString enumWriteText(const QStringList& choices, int index) {
+  const auto number = QString::number(index);
+  if (!choices.contains(number)) return number;
+  if (index >= 0 && index < choices.size() && choices.indexOf(choices[index]) == index) return choices[index];
+  return {};
 }
 std::deque<WriteRecord>& writeLog() { static std::deque<WriteRecord> log; return log; }
 void logWrite(WriteRecord record) {
