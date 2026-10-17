@@ -82,21 +82,26 @@ benchmark-cpu: $(OBJ_DIR)/benchmark_cpu$(EXEEXT)
 	QT_QPA_PLATFORM=offscreen $< --pvs 100 --period 100 --history 10000
 	QT_QPA_PLATFORM=offscreen $< --pvs 1 --period 100 --history 10000 --view inspector
 	QT_QPA_PLATFORM=offscreen $< --pvs 1 --period 100 --history 10000 --view trend
-# Optional integration test: run inside an isolated X server via xvfb-run.
+# Optional X11 integration tests. They inject synthetic pointer input, so they
+# always run on a private Xvfb display and never on the user's desktop.
+XVFB_RUN ?= xvfb-run -a -s '-screen 0 1920x1080x24 -nolisten tcp'
+require_xvfb = @command -v xvfb-run > /dev/null || { echo '$@ needs xvfb-run (Xvfb); it never uses your display.'; exit 1; }
 QTEDM_TEST_PROGRAM ?= $(abspath ../../medm/bin/$(OS)-$(ARCH)/qtedm)
 .PHONY: test-qtedm-drop
 $(OBJ_DIR)/x11_drag_driver: tests/x11_drag_driver.c | $(OBJ_DIR)
 	$(CC) $< -o $@ -lX11 -lXtst
 test-qtedm-drop: $(OBJ_DIR)/test_ui$(EXEEXT) $(OBJ_DIR)/x11_drag_driver
-	QT_QPA_PLATFORM=xcb QTPROBE_TEST_QTEDM="$(QTEDM_TEST_PROGRAM)" \
+	$(require_xvfb)
+	$(XVFB_RUN) env QT_QPA_PLATFORM=xcb QTPROBE_TEST_QTEDM="$(QTEDM_TEST_PROGRAM)" \
 	 QTPROBE_TEST_DRAG_DRIVER="$(abspath $(OBJ_DIR)/x11_drag_driver)" \
 	 $(OBJ_DIR)/test_ui qtedmMiddleButtonDrop
-# Real Motif interoperability check; run in an X11 session or under xvfb-run.
+# Real Motif interoperability check, also on a private Xvfb display.
 .PHONY: test-motif
 $(OBJ_DIR)/motif_drag_source: tests/motif_drag_source.c | $(OBJ_DIR)
 	$(CC) $(addprefix -I,$(MOTIF_INC) $(X11_INC)) $< -o $@ -lXm -lXt -lX11 -lXtst
 test-motif: $(OBJ_DIR)/test_ui$(EXEEXT) $(OBJ_DIR)/motif_drag_source
-	QT_QPA_PLATFORM=xcb QTPROBE_TEST_MOTIF_SOURCE="$(abspath $(OBJ_DIR)/motif_drag_source)" \
+	$(require_xvfb)
+	$(XVFB_RUN) env QT_QPA_PLATFORM=xcb QTPROBE_TEST_MOTIF_SOURCE="$(abspath $(OBJ_DIR)/motif_drag_source)" \
 	 $(OBJ_DIR)/test_ui motifMiddleButtonDrop
 test-ioc: $(OBJ_DIR)/test_ioc$(EXEEXT) $(OBJ_DIR)/qtprobe$(EXEEXT)
 	QT_QPA_PLATFORM=offscreen $<

@@ -77,11 +77,13 @@ drops. Table previews are saved as `workspace-all-pvs-{light,dark,compact}.png`.
 For a real QtEDM middle-button gesture, with QtEDM already built, run:
 
 ```sh
-xvfb-run -a -s '-screen 0 1920x1080x24' make -C qtprobe test-qtedm-drop
+make -C qtprobe test-qtedm-drop
 ```
 
 This optional Linux test builds a small X11/XTest mouse driver and launches the
-unmodified sibling `medm/bin/Linux-x86_64/qtedm` with a test display. Override
+unmodified sibling `medm/bin/Linux-x86_64/qtedm`. The target starts its own
+Xvfb display with `xvfb-run` (override with `XVFB_RUN`), so the synthetic
+pointer input never reaches your desktop. Override
 `QTEDM_TEST_PROGRAM=/path/to/qtedm` when needed. It checks drops on the welcome
 page, name editor, inspector value, staged value editor, a table row and the
 tab strip, including
@@ -94,7 +96,7 @@ the way MEDM does (`XmDragStart`, COMPOUND_TEXT, copy) and drops on the window.
 It needs Motif, Xt and XTest development files:
 
 ```sh
-xvfb-run -a -s '-screen 0 1280x1024x24' make -C qtprobe test-motif
+make -C qtprobe test-motif
 ```
 
 It covers a new PV, a duplicate, the provider selector and a refused name.
