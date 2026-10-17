@@ -42,7 +42,12 @@ RecordExplorer::RecordExplorer(Channel* subject, double timeout, QWidget* parent
   update = new QTimer(this); update->setSingleShot(true); update->setInterval(150);
   connect(update, &QTimer::timeout, this, &RecordExplorer::refresh);
   // Staleness and connection timeouts advance without monitor events.
-  tick = new QTimer(this); tick->setInterval(2000); connect(tick, &QTimer::timeout, this, &RecordExplorer::refresh);
+  tick = new QTimer(this); tick->setInterval(2000);
+  connect(tick, &QTimer::timeout, this, [this] {
+    // IOCs post no monitors for PACT and UDF, or for DISA read through SDIS.
+    for (const auto& row : rows) if (row.spec.name == "PACT" || row.spec.name == "UDF" || row.spec.name == "DISA") row.channel->refetch();
+    refresh();
+  });
   summary->setText("Open to read the record's fields.");
 }
 RecordExplorer::~RecordExplorer() { setActive(false); }
@@ -81,10 +86,13 @@ void RecordExplorer::refresh() {
   }
   if (!type.isEmpty() && type != loadedType) { loadedType = type; addFields(typeRecordFields(type)); }
   else if (expired && loadedType.isEmpty() && !scan.isEmpty()) { loadedType = "?"; addFields(typeRecordFields({})); }
-  QMap<QString, QString> values; QVector<const Row*> shown;
+  // Disconnected fields keep their last values on screen but are not diagnosed.
+  QMap<QString, QString> values, display; QVector<const Row*> shown; bool disconnected = !subject->snapshot.connected;
   for (const auto& row : rows) {
     const auto& s = row.channel->snapshot;
-    if (s.hasValue) values[row.spec.name] = row.spec.name == "STAT" ? alarmStatusName(shownValue(s)) : shownValue(s);
+    if (s.hasValue) display[row.spec.name] = row.spec.name == "STAT" ? alarmStatusName(shownValue(s)) : shownValue(s);
+    if (s.hasValue && s.connected) values[row.spec.name] = display[row.spec.name];
+    disconnected = disconnected || (s.hasValue && !s.connected);
     // Fields this record type or IOC version lacks never connect; drop them.
     if (s.hasValue || row.since.elapsed() <= limit) shown << &row;
   }
@@ -94,7 +102,7 @@ void RecordExplorer::refresh() {
     setTone(summary, "warning"); table->setRowCount(0); shownFindings.clear(); return;
   }
   const double age = subject->lastUpdateMs ? (QDateTime::currentMSecsSinceEpoch() - subject->lastUpdateMs) / 1000.0 : -1;
-  shownFindings = recordDiagnosis(values, age);
+  shownFindings = disconnected ? QVector<Finding>{{"Record fields are disconnected; the diagnosis resumes when they reconnect.", true}} : recordDiagnosis(values, age);
   QStringList lines; bool problem = false;
   for (const auto& finding : shownFindings) { lines << (finding.problem ? "⚠ " : "• ") + finding.text; problem |= finding.problem; }
   const auto head = type.isEmpty() ? record : QString("%1 · %2 record").arg(record, type);
@@ -122,12 +130,12 @@ void RecordExplorer::refresh() {
     const Row* row = nullptr; for (const auto* candidate : shown) if (candidate->spec.name == field) row = candidate;
     if (!row) continue;
     const auto& s = row->channel->snapshot; auto* item = table->item(r, 1);
-    const auto text = !s.hasValue ? QString("…") : values.value(field).isEmpty() && row->spec.link ? QString("(empty)") : values.value(field);
-    const auto target = row->spec.link ? linkTarget(values.value(field)) : QString();
+    const auto text = !s.hasValue ? QString("…") : display.value(field).isEmpty() && row->spec.link ? QString("(empty)") : display.value(field);
+    const auto target = row->spec.link && s.connected ? linkTarget(display.value(field)) : QString();
     if (item->text() != text) item->setText(text);
     item->setData(Qt::UserRole, target);
     auto font = item->font(); font.setUnderline(!target.isEmpty()); item->setFont(font);
-    item->setForeground(!target.isEmpty() ? c.accent : !s.hasValue || (row->spec.link && values.value(field).isEmpty()) ? c.muted : c.text);
+    item->setForeground(!target.isEmpty() ? c.accent : !s.hasValue || !s.connected || (row->spec.link && display.value(field).isEmpty()) ? c.muted : c.text);
     item->setToolTip(!target.isEmpty() ? QString("%1\nClick to open %2. Modifiers: PP/NPP process the target or not, CA/CP/CPP use Channel Access "
         "(CP processes this record on change), MS/NMS pass alarms.").arg(text, target) : text);
   }

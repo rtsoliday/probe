@@ -11,6 +11,8 @@ public:
   virtual void poll() = 0;
   virtual void write(const QStringList&) = 0;
   virtual void process() { throw std::runtime_error("Record processing is available for Channel Access PVs only"); }
+  // Reads the current value again, for fields the server does not post.
+  virtual void refetch() {}
 };
 class Channel final : public QObject {
   Q_OBJECT
@@ -30,6 +32,8 @@ public:
   void writeValues(const QStringList&);
   // Writes 1 to the record's PROC field (CA).
   void process();
+  // Reads the current value again (IOCs post no monitors for PACT, UDF, or DISA set through SDIS).
+  void refetch();
   // Client time of the last value update, in ms since the epoch; 0 if none.
   qint64 lastUpdateMs = 0;
   // Backends only call these on the Qt thread.

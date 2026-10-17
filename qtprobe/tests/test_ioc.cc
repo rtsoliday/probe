@@ -204,6 +204,24 @@ private slots:
       for (const auto& f : why.findings()) QVERIFY2(!f.text.startsWith("Alarm 18"), qPrintable(f.text));
     }
   }
+  void recordFieldsStayCurrent() {
+    for (const auto& provider : providers()) {
+      // PACT is never posted: a record opened while processing must not stay "stuck".
+      Channel a({prefix + "slow.A", "ca"}); a.start(); QTRY_VERIFY_WITH_TIMEOUT(a.snapshot.writable, 10000);
+      Channel subject({prefix + "slow", provider}); subject.start(); QTRY_VERIFY_WITH_TIMEOUT(subject.snapshot.hasValue, 10000);
+      QSignalSpy done(&a, &Channel::writeFinished); a.write("3"); QTest::qWait(200);
+      RecordExplorer explorer(&subject, 3); explorer.show(); explorer.setActive(true);
+      QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("PACT"), QString("1"), 3000); QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 5000);
+      QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("PACT"), QString("0"), 6000);
+      auto said = [&](const QString& start) { for (const auto& f : explorer.findings()) if (f.text.startsWith(start)) return true; return false; };
+      QTRY_VERIFY(!said("Processing is active"));
+      // Without the IOC the last values are not diagnosed as current.
+      ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog();
+      QTRY_VERIFY_WITH_TIMEOUT(said("Record fields are disconnected"), 15000); QVERIFY(!said("No processing problems"));
+      // Back again (never processed since the restart, so UDF = 1) the diagnosis resumes.
+      launch(); QTRY_VERIFY_WITH_TIMEOUT(subject.snapshot.connected && !said("Record fields are disconnected") && said("UDF = 1"), 20000);
+    }
+  }
   void readOnlyAndMultipleContexts() {
     for (const auto& provider : providers()) {
       Channel ro({prefix + "number", provider}, true); ro.start(); QTRY_VERIFY(ro.snapshot.hasValue);

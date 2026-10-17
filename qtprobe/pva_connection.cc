@@ -398,6 +398,14 @@ public:
       owner.update(s);
     }
   }
+  void refetch() override {
+    // A new monitor delivers the current value first. Only for channels
+    // without a put, whose events share the epoch.
+    if (!channel || !channel->isConnected() || !monitor || put) return;
+    ++epoch; monitor->destroy(); monitor.reset();
+    monitorRequester = std::make_shared<MonitorRequester>(inbox, limit, epoch);
+    monitor = channel->createMonitor(monitorRequester, pvd::CreateRequest::create()->createRequest("field()"));
+  }
   void write(const QStringList& values) override {
     if (!channel || !channel->isConnected() || !s.writable || !put || !putStructure)
       throw std::runtime_error("PVA write operation unavailable");

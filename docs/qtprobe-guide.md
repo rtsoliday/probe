@@ -308,6 +308,9 @@ QSRV), so it works on any IOC without extra software. Fields are grouped:
   and so on. Unknown record types show INP, OUT and DOL when present.
 - **Monitors**: MDEL and ADEL for analog and integer records.
 
+IOCs post no monitors for PACT and UDF, or for DISA read through SDIS, so
+these fields are read again every two seconds. While the PV or its fields are
+disconnected, their last values stay grayed and are not diagnosed.
 Fields the record or IOC version does not have are dropped after the
 connection timeout. Links are read as `FIELD$`, so long links are complete.
 Hover a field for its meaning. A link that names a PV is underlined; click it

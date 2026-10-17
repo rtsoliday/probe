@@ -77,6 +77,10 @@ void Channel::writeValues(const QStringList& values) {
   catch (const std::exception& e) { completeWrite(false, QString::fromLocal8Bit(e.what())); }
   emit changed();
 }
+void Channel::refetch() {
+  if (!connection || !snapshot.connected) return;
+  try { connection->refetch(); } catch (const std::exception& e) { snapshot.error = QString::fromLocal8Bit(e.what()); emit changed(); }
+}
 void Channel::process() {
   if (readOnly_ || !snapshot.connected || !snapshot.processable || !connection || writePending_ || writeUncertain_) {
     emit writeFinished(false, "Processing unavailable: read-only, disconnected, denied, pending or uncertain completion."); return;
