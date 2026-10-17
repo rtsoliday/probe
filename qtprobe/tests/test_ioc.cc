@@ -552,10 +552,17 @@ private slots:
     // The IOC returns with another record type under the same name: CA subscribes with the new type.
     Channel c({prefix + "retype", "ca"}); c.start();
     QTRY_VERIFY_WITH_TIMEOUT(c.snapshot.hasValue, 10000); QCOMPARE(c.snapshot.values.value(0), QString("12"));
+#if QTPROBE_HAVE_PVA
+    Channel pva({prefix + "retype", "pva"}); pva.start(); QTRY_VERIFY_WITH_TIMEOUT(pva.snapshot.hasValue, 10000); QCOMPARE(pva.snapshot.values.value(0), QString("12"));
+#endif
     ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); QTRY_VERIFY_WITH_TIMEOUT(!c.snapshot.connected, 15000);
     launch(QFINDTESTDATA("fixture-retyped.db"));
     QTRY_VERIFY_WITH_TIMEOUT(c.snapshot.connected && c.snapshot.hasValue && c.snapshot.metadataReady && c.snapshot.type == "DBF_DOUBLE", 20000);
     QTRY_COMPARE(c.snapshot.values.value(0), QString("12.75")); QCOMPARE(c.snapshot.valueText(), QString("12.750"));
+#if QTPROBE_HAVE_PVA
+    // PVA creates its monitor again on every connection, so it follows the new type too.
+    QTRY_VERIFY_WITH_TIMEOUT(pva.snapshot.connected && pva.snapshot.type == "double", 20000); QTRY_COMPARE(pva.snapshot.values.value(0), QString("12.75"));
+#endif
     ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
     // An inspector's Undo from before such a change is not offered for the new type.
     Options options; Inspector inspector(Address::parse(prefix + "retype"), options); inspector.show(); auto* channel = inspector.channel();
