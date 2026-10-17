@@ -1,6 +1,7 @@
 #include "model.h"
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QLocale>
 #include <QRegularExpression>
 #include <cmath>
 #include <stdexcept>
@@ -298,7 +299,8 @@ QStringList parseWrite(const Snapshot& s, const QString& text, QString* error) {
         if (std::abs(number) > 9007199254740991.0 && std::trunc(number) == number) {
           *error = "Quote integers above 2^53−1 in JSON arrays."; return {};
         }
-        values << QString::number(number, 'g', 17);
+        // The shortest text that reads back as the same double ("0.1", not "0.10000000000000001").
+        values << QString::number(number, 'g', QLocale::FloatingPointShortest);
       } else if (v.isBool()) values << (v.toBool() ? "1" : "0");
       else { *error = "Only scalar array elements are supported."; return {}; }
     }

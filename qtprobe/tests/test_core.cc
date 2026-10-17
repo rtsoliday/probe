@@ -103,6 +103,9 @@ private slots:
     s.choices.clear(); s.array = true; s.provider = "ca"; s.capacity = 3;
     QCOMPARE(parseWrite(s, "[1,2,3]", &error).size(), 3); QVERIFY(error.isEmpty());
     QCOMPARE(parseWrite(s, "[\"18446744073709551615\"]", &error)[0], QString("18446744073709551615"));
+    // JSON numbers keep their shortest exact form, so string arrays get the text that was typed.
+    QCOMPARE(parseWrite(s, "[0.1, 1e-7, 3]", &error), (QStringList{"0.1", "1e-07", "3"}));
+    for (const auto& v : parseWrite(s, "[0.1, 0.30000000000000004, 1.7976931348623157e308]", &error)) QVERIFY(QString::number(v.toDouble(), 'g', QLocale::FloatingPointShortest) == v);
     parseWrite(s, "[18446744073709551615]", &error); QVERIFY(!error.isEmpty());
     parseWrite(s, "[1,2,3,4]", &error); QVERIFY(!error.isEmpty());
     parseWrite(s, "[]", &error); QVERIFY(!error.isEmpty());
