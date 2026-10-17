@@ -25,7 +25,9 @@ int main(int argc, char** argv) {
     if ((arg == "--session" || arg == "-session") && i + 1 < argc) { hasSession = true; sessionFile = QString::fromLocal8Bit(argv[++i]); continue; }
     if (arg.startsWith("--session=") || arg.startsWith("-session=")) { hasSession = true; sessionFile = QString::fromLocal8Bit(arg.mid(arg.indexOf('=') + 1)); continue; }
     if (arg == "-style" || arg.startsWith("-style=")) explicitStyle = true;
-    if (arg == "--info" || arg == "-info" || arg == "--json" || arg == "-json" || arg == "--help" || arg == "--help-all" || arg == "-h" || arg == "--version" || arg == "-v") headless = true;
+    // Help, version and the headless report need no display (-word options are long options).
+    if (arg == "--info" || arg == "-info" || arg == "--json" || arg == "-json" || arg == "--help" || arg == "-help" || arg == "--help-all" || arg == "-help-all" ||
+        arg == "-h" || arg == "-?" || arg == "--version" || arg == "-version" || arg == "-v") headless = true;
     args.push_back(argv[i]);
   }
   int count = int(args.size()); args.push_back(nullptr);
@@ -52,6 +54,8 @@ int main(int argc, char** argv) {
   parser.addOption({"json", "Use JSON output with --info; values are exact strings."});
   parser.addOption({"session", "Open a QtProbe .qtp session.", "file"});
   parser.addPositionalArgument("PV", "PV names, ca://PV or pva://PV.", "[PV…]");
+  // Invalid arguments exit with status 2, as documented; process() would exit 1.
+  if (!parser.parse(QCoreApplication::arguments())) { QTextStream(stderr) << QCoreApplication::applicationName() << ": " << parser.errorText() << '\n'; return 2; }
   parser.process(*app);
   Options options; options.provider = parser.value("provider"); options.readOnly = parser.isSet("read-only");
   bool timeoutOK, maxOK, historyOK, memoryOK;

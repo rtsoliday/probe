@@ -253,7 +253,13 @@ private slots:
     // Argument errors are reported without a display.
     auto bare = env; bare.remove("QT_QPA_PLATFORM"); process.setProcessEnvironment(bare);
     process.start(exe, {"--json", prefix + "number"}); QVERIFY(process.waitForFinished(5000));
-    QCOMPARE(process.exitStatus(), QProcess::NormalExit); QCOMPARE(process.exitCode(), 2); process.setProcessEnvironment(env);
+    QCOMPARE(process.exitStatus(), QProcess::NormalExit); QCOMPARE(process.exitCode(), 2);
+    for (const char* option : {"-help", "-version"}) {
+      process.start(exe, {option}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitStatus(), QProcess::NormalExit); QCOMPARE(process.exitCode(), 0);
+    }
+    process.setProcessEnvironment(env);
+    process.start(exe, {"--info", "--no-such-option", prefix + "number"}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitCode(), 2);
+    QVERIFY(process.readAllStandardError().contains("no-such-option"));
     // EPICS parses numbers (CA settings, PVA puts) with C rules in a decimal-comma locale.
     const std::string numeric = std::setlocale(LC_NUMERIC, nullptr);
     if (std::setlocale(LC_NUMERIC, "de_DE.UTF-8")) {
