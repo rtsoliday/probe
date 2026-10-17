@@ -436,6 +436,21 @@ private slots:
       wide.write(text); ++n; QTRY_COMPARE(wrote.size(), n); QVERIFY2(wrote.back()[0].toBool(), qPrintable(text)); QTRY_COMPARE(wide.snapshot.number, expected);
     }
   }
+  void slowRecordWriteCompletes() {
+    // A put-callback still processing after 10 s on a connected PV keeps waiting and then reports its real result.
+    Options options; Inspector slow(Address::parse(prefix + "slower.A"), options); slow.show(); auto* channel = slow.channel();
+    QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.hasValue && channel->snapshot.writable, 10000);
+    writeLog().clear(); QSignalSpy done(channel, &Channel::writeFinished); slow.requestWrite("4");
+    QTRY_VERIFY_WITH_TIMEOUT(channel->writeSlow(), 12000); QCOMPARE(done.size(), 0); QVERIFY(channel->writePending()); QVERIFY(!channel->writeUncertain());
+    slow.refresh(); QVERIFY(slow.findChild<QLabel*>("writeStatus")->text().startsWith("Still processing"));
+    QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 10000); QVERIFY(done[0][0].toBool()); QCOMPARE(done[0][1].toString(), QString("Write completed"));
+    QVERIFY(!channel->writeSlow()); QVERIFY(!channel->writeUncertain()); QCOMPARE(writeLog().size(), size_t(1)); QVERIFY(writeLog().back().ok);
+    QTRY_VERIFY(slow.findChild<QPushButton*>("undoWriteButton")->isEnabled());
+    // Reconnect while still processing abandons the wait: the outcome is unknown.
+    slow.requestWrite("5"); QTRY_VERIFY_WITH_TIMEOUT(channel->writeSlow(), 12000); channel->start();
+    QTRY_COMPARE(done.size(), 2); QVERIFY(!done[1][0].toBool()); QVERIFY(done[1][1].toString().contains("outcome unknown"));
+    writeLog().clear();
+  }
   void writeInterruptedByDisconnect() {
     // A CA put still processing when the IOC goes away has an unknown outcome: writes wait for Reconnect.
     Options options; Inspector slow(Address::parse(prefix + "slow.A"), options); slow.show(); auto* channel = slow.channel();

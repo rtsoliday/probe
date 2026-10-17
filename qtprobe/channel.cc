@@ -23,6 +23,9 @@ Channel::Channel(Address a, bool ro, int maxElements, int historySize, double ti
   });
   writeDeadline.setSingleShot(true);
   connect(&writeDeadline, &QTimer::timeout, this, [this] {
+    // While connected, a CA put-callback completes when record processing
+    // does (a long motor move); keep waiting. A disconnect completes it.
+    if (snapshot.connected && connection) { writeSlow_ = true; emit changed(); return; }
     completeWrite(false, "Write completion timed out; outcome unknown. Check readback and reconnect before retrying.", true);
   });
 }
@@ -103,7 +106,7 @@ void Channel::process() {
 }
 void Channel::completeWrite(bool ok, QString message, bool uncertain) {
   if (!writePending_) return;
-  writePending_ = false; writeDeadline.stop(); writeUncertain_ = writeUncertain_ || uncertain;
+  writePending_ = writeSlow_ = false; writeDeadline.stop(); writeUncertain_ = writeUncertain_ || uncertain;
   emit writeFinished(ok, message.isEmpty() ? (ok ? "Write completed" : "Write failed") : message);
   emit changed();
 }

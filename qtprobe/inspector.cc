@@ -634,6 +634,7 @@ void Inspector::refreshWriteControls() {
   if (channel_->readOnly()) message = "Read-only session · writes are disabled.";
   else if (!s.connected || !s.hasValue) message = "Connect to the PV to write a value.";
   else if (!s.writable) message = "The server does not allow writes to this PV.";
+  else if (channel_->writeSlow()) { message = "Still processing: the server has not reported completion after 10 s. Reconnect abandons the wait."; tone = "warning"; }
   else if (channel_->writePending()) message = "Writing… waiting for server completion.";
   else if (channel_->writeUncertain()) { message = "Write outcome is uncertain. Check readback and reconnect before retrying."; tone = "warning"; }
   else if (!lastWriteMessage.isEmpty()) {

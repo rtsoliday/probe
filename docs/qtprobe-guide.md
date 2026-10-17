@@ -216,8 +216,11 @@ buttons, and **Dial** reveals the optional dial. CA writes and Process use a
 put with completion callback (unlike the Motif Probe's plain put): the result
 line reports completion after the record finishes processing, and no other
 write to that PV is sent meanwhile. If completion takes longer than 10 s (a
-long motor move or another asynchronous record), the outcome is reported as
-unknown; inspect readback and reconnect before another write is enabled. Stop
+long motor move or another asynchronous record), the result line says the
+record is still processing and QtProbe keeps waiting while the PV stays
+connected; the result is reported when the server sends it. **Reconnect** or
+**Stop** abandons the wait, and a disconnect during the write leaves its outcome
+unknown: inspect readback and reconnect before another write is enabled. Stop
 fields such as a motor's `STOP` are separate PVs and can be written from their
 own inspector.
 
@@ -479,8 +482,10 @@ Use Command instead of Ctrl on macOS where a platform shortcut applies.
 - **Built without pvAccess:** rebuild against EPICS Base with pvAccess and
   pvData installed. CA-only builds report this diagnostic for PVA addresses.
 - **Write is disabled:** check read-only mode, connection state, access rights
-  and whether a write is pending. A completion timeout requires checking
-  readback and reconnecting before another write is enabled. Large 64-bit
+  and whether a write is pending (a slow record keeps a write pending until it
+  finishes). A write whose outcome is unknown (a disconnect during the write,
+  or Reconnect/Stop while it was pending) requires checking readback and
+  reconnecting before another write is enabled. Large 64-bit
   integers use the exact value editor rather than slider/dial adjustments.
 - **Fewer array values shown:** the array table and plot show the first 2048
   retained values; `--max-elements` controls retention. JSON export includes the

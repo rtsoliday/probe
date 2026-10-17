@@ -40,18 +40,21 @@ public:
   qint64 lastUpdateMs = 0;
   // Backends only call these on the Qt thread.
   void update(Snapshot);
-  // An uncertain outcome (timeout, disconnect) keeps writes disabled until start().
+  // An uncertain outcome (disconnect, Stop, or a timeout while disconnected)
+  // keeps writes disabled until start().
   void completeWrite(bool, QString, bool uncertain = false);
   // Thread-safe delivery request. Bursts share one pending, bounded-rate drain.
   void requestPoll();
   bool writePending() const { return writePending_; }
   bool writeUncertain() const { return writeUncertain_; }
+  // A connected write still pending 10 s after it was sent; the record may still be processing.
+  bool writeSlow() const { return writeSlow_; }
 signals:
   void changed();
   void writeFinished(bool ok, QString message);
 private:
   Address address;
-  bool readOnly_, writePending_ = false, writeUncertain_ = false;
+  bool readOnly_, writePending_ = false, writeUncertain_ = false, writeSlow_ = false;
   int maxElements_;
   double timeout_;
   QTimer timer, deadline, writeDeadline;
