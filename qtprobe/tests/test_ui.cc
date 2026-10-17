@@ -349,6 +349,15 @@ private slots:
       window.closePv(0);
     }
   }
+  void tabDragAfterCloseIsIgnored() {
+    // A middle-press on a tab, then the PV closes (Ctrl+W), then the pointer moves: no drag of a stale tab.
+    Options options; options.connectOnOpen = false; Window window(options); window.show(); window.addPvs({"D:one", "D:two"});
+    auto* tabs = window.findChild<QTabBar*>("pvTabs"); const auto where = tabs->tabRect(1).center();
+    QMouseEvent press(QEvent::MouseButtonPress, where, Qt::MiddleButton, Qt::MiddleButton, Qt::NoModifier); QApplication::sendEvent(tabs, &press);
+    window.closePv(1);
+    QMouseEvent move(QEvent::MouseMove, where + QPoint(40, 0), Qt::NoButton, Qt::MiddleButton, Qt::NoModifier); QApplication::sendEvent(tabs, &move);
+    QCOMPARE(window.inspectors()->count(), 1);
+  }
   void confirmationShowsWhatIsSent() {
     // The question names enum states by label and counts array elements.
     Options options; options.connectOnOpen = false; Inspector inspector(Address::parse("C:gain"), options); inspector.show();

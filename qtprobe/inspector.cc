@@ -1014,7 +1014,7 @@ bool Window::eventFilter(QObject* object, QEvent* event) {
   if (object == pvTabs && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseMove)) {
     auto* mouse = static_cast<QMouseEvent*>(event);
     if (event->type() == QEvent::MouseButtonPress && mouse->button() == Qt::MiddleButton) { dragTab = pvTabs->tabAt(mouse->pos()); dragStart = mouse->pos(); }
-    else if (event->type() == QEvent::MouseMove && (mouse->buttons() & Qt::MiddleButton) && dragTab >= 0 &&
+    else if (event->type() == QEvent::MouseMove && (mouse->buttons() & Qt::MiddleButton) && dragTab >= 0 && dragTab < stack->count() &&
              (mouse->pos() - dragStart).manhattanLength() >= QApplication::startDragDistance()) {
       const auto& s = static_cast<Inspector*>(stack->widget(dragTab))->channel()->snapshot; dragTab = -1;
       startNameDrag(pvTabs, portableName(s.provider, s.name)); return true;
@@ -1129,6 +1129,7 @@ void Window::closePv(int index) {
   comparison->remove(static_cast<Inspector*>(widget)->channel());
   { QSignalBlocker stackBlock(stack), tabBlock(pvTabs); stack->removeWidget(widget); pvTabs->removeTab(index); }
   delete widget; navigationDirty = true; updateNavigation();
+  dragTab = -1;  // a middle-drag that started on a tab no longer refers to the same PV
 }
 void Window::saveSession(const QString& path) {
   QJsonArray pvs;
