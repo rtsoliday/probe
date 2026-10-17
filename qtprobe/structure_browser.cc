@@ -163,12 +163,15 @@ bool StructureBrowser::sync(QTreeWidgetItem* parent, const FieldNode& node, cons
     // Long strings and arrays stay on one row; the tooltip holds more.
     QString shown = child.value; shown.replace('\n', QChar(0x21B5));
     set(item, ValueColumn, shown);
-    if (item->data(ValueColumn, Qt::UserRole).toString() != child.value) {
-      item->setData(ValueColumn, Qt::UserRole, child.value);
-      const auto exact = exactValue(child);
-      item->setToolTip(ValueColumn, exact.size() > 60 ? exact.left(2000) : QString());
-      item->setToolTip(TypeColumn, child.type.size() > 11 ? child.type : QString());
+    const bool summaryChanged = item->data(ValueColumn, Qt::UserRole).toString() != child.value;
+    if (summaryChanged) item->setData(ValueColumn, Qt::UserRole, child.value);
+    // An array's summary shows its first 16 elements; the tooltip lists every received one.
+    if (summaryChanged || (child.kind == FieldNode::Array && child.children.size() > 16)) {
+      const auto exact = exactValue(child), tip = exact.size() > 60 ? exact.left(2000) : QString();
+      if (item->toolTip(ValueColumn) != tip) item->setToolTip(ValueColumn, tip);
     }
+    const auto typeTip = child.type.size() > 11 ? child.type : QString();
+    if (item->toolTip(TypeColumn) != typeTip) item->setToolTip(TypeColumn, typeTip);
     if (item->foreground(TypeColumn).color() != c.muted) item->setForeground(TypeColumn, QBrush(c.muted));
     const auto old = previous.constFind(key);
     const bool changed = old != previous.cend() && *old != child.value;

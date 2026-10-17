@@ -360,6 +360,20 @@ private slots:
     inspector.requestWrite("[4, 5]"); QVERIFY2(question.contains("Write 2 elements [4, 5]") && question.contains("Current value: 3 elements [1, 2, 3]"), qPrintable(question));
     question.clear(); inspector.requestWrite("not json"); QVERIFY(question.isEmpty());
   }
+  void structureTooltipFollowsLaterElements() {
+    // Only element [20] changes, so the 16-element summary stays the same; the row's tooltip must not.
+    StructureBrowser browser; browser.show();
+    auto tree = [](const QString& twenty) {
+      FieldNode root; root.kind = FieldNode::Structure; root.type = "structure";
+      FieldNode wave; wave.name = "wave"; wave.type = "double[]"; wave.kind = FieldNode::Array; wave.length = 30;
+      QStringList values; for (int i = 0; i < 30; ++i) values << (i == 20 ? twenty : QString::number(i));
+      for (int i = 0; i < 30; ++i) { FieldNode e; e.name = QString("[%1]").arg(i); e.type = "double"; e.value = values[i]; wave.children << e; }
+      wave.value = '[' + values.mid(0, 16).join(", ") + ", …]"; root.children << wave;
+      return std::make_shared<FieldNode>(root);
+    };
+    browser.setTree(tree("20")); auto* row = browser.findChild<QTreeWidget*>("structureFields")->topLevelItem(0);
+    QVERIFY(row->toolTip(2).contains(", 20, 21,")); browser.setTree(tree("99")); QVERIFY2(row->toolTip(2).contains(", 99, 21,"), qPrintable(row->toolTip(2)));
+  }
   void structureMenuSurvivesUpdates() {
     // An update while a field's menu is open replaces the tree; the chosen action uses the live rows.
     QSettings().setValue("sections", int(StructureSection));
