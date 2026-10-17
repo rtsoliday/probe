@@ -408,7 +408,9 @@ private slots:
     QVERIFY(channel->writeUncertain());
     launch(); QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.connected && channel->snapshot.writable, 20000);
     channel->write("3"); QCOMPARE(done.size(), 3); QVERIFY(!done[2][0].toBool());
-    channel->start(); QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.writable, 10000); QVERIFY(!channel->writeUncertain());
+    channel->start(); QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.writable && channel->snapshot.hasValue, 10000); QVERIFY(!channel->writeUncertain());
+    // Undo would restore the value from before the first write, not what the second replaced.
+    slow.refresh(); auto* undo = slow.findChild<QPushButton*>("undoWriteButton"); QVERIFY(!undo->isEnabled()); QVERIFY(undo->toolTip().contains("unknown"));
   }
   void reconnectAfterIocRestart() {
     std::vector<std::unique_ptr<Channel>> channels;

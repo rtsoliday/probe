@@ -473,7 +473,13 @@ Inspector::Inspector(Address address, Options options, QWidget* parent) : QWidge
     if (pendingLog) {
       pendingLog = false; const auto& s = channel_->snapshot;
       logWrite({QDateTime::currentDateTime(), s.provider + "://" + s.name, pendingBefore, pendingAfter, message, ok});
-      if (ok && !pendingProcess) { undoValue = pendingBefore; undoValues = pendingBeforeValues; hasUndo = pendingUndoable; undoLost = !pendingUndoable; }
+      if (ok && !pendingProcess) {
+        undoValue = pendingBefore; undoValues = pendingBeforeValues; hasUndo = pendingUndoable;
+        undoUnavailable = pendingUndoable ? QString() : "Undo unavailable: the readback before your last write was truncated";
+      } else if (channel_->writeUncertain()) {
+        // The PV may hold the new value; an older Undo would not restore what this write replaced.
+        hasUndo = false; undoUnavailable = "Undo unavailable: the outcome of your last write is unknown";
+      }
       if (logged) logged();
     }
     refreshWriteControls();
@@ -585,7 +591,7 @@ void Inspector::refreshWriteControls() {
   put->setEnabled(ready); input->setEnabled(writable); enumChoice->setEnabled(writable);
   undo->setEnabled(ready && hasUndo);
   undo->setToolTip(hasUndo ? "Restore " + preview(undoValue) + ", the value before your last write" :
-      undoLost ? "Undo unavailable: the readback before your last write was truncated" : "No write to undo yet");
+      !undoUnavailable.isEmpty() ? undoUnavailable : "No write to undo yet");
   processButton->setVisible(!channel_->readOnly() && s.processable);
   processButton->setEnabled(s.connected && !channel_->writePending() && !channel_->writeUncertain());
   useReadback->setEnabled(writable && s.readable && (!s.array || !s.truncated) && (s.choices.isEmpty() || !s.editText().isEmpty()));

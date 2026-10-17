@@ -106,7 +106,8 @@ private:
   QString undoValue, pendingBefore, pendingAfter;
   QStringList undoValues, pendingBeforeValues;
   QPoint dragStart;
-  bool hasUndo = false, undoLost = false, pendingLog = false, pendingProcess = false, pendingUndoable = false;
+  bool hasUndo = false, pendingLog = false, pendingProcess = false, pendingUndoable = false;
+  QString undoUnavailable;
   bool beginWrite(const QString& shown);
   QScrollArea* scroll;
   QWidget *body, *writeArea;
