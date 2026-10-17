@@ -11,7 +11,8 @@ CXXFLAGS ?= -O2 -g -Wall -Wextra -Wno-unused-parameter -std=c++17 -fPIC
 LIBS = $(if $(filter 1,$(HAVE_PVA)),$(PVA_LIBS)) $(CA_LIBS) $(EPICS_SYS_LIBS) $(QT_LIBS)
 # Shared EPICS libraries need a run path; static ones (the default) must not add
 # one, or every launch searches that directory first for Qt and system libraries.
-LDFLAGS += $(if $(filter %.$(EPICS_SHARED_EXT),$(CA_LIBS) $(PVA_LIBS)),-Wl,-rpath,$(EPICS_LIB_DIR))
+comma := ,
+LDFLAGS += $(if $(filter %.$(EPICS_SHARED_EXT),$(CA_LIBS) $(PVA_LIBS)),-Wl$(comma)-rpath$(comma)$(EPICS_LIB_DIR))
 # Legacy MEDM's Motif drop protocol is available on X11 without linking Motif.
 ifeq ($(OS),Linux)
 ifneq ($(shell $(PKG_CONFIG) --exists xcb && echo yes),)
