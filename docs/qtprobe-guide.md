@@ -2,7 +2,7 @@
 
 ## Getting started
 
-QtProbe inspects EPICS process variables over Channel Access (CA) and pvAccess
+QtProbe 0.1.0 inspects EPICS process variables over Channel Access (CA) and pvAccess
 (PVA). Enter a name and press **Add** or Enter. Plain names use the selected
 provider (CA initially). `ca://` and `pva://` prefixes always override it.
 Type or paste several names separated by spaces or new lines to add them all.

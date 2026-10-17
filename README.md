@@ -1,6 +1,6 @@
 # Probe and QtProbe
 
-This fork preserves the original Motif Probe in `probe/` and adds **QtProbe**,
+This fork preserves the original Motif Probe in `probe/` and adds **QtProbe 0.1.0**,
 a C++17 Qt 5.15/Qt 6 PV inspector in `qtprobe/`, following the layout and build
 conventions of QtEDM, QtALH and Qt StripTool.
 

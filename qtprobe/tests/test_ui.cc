@@ -928,6 +928,9 @@ private slots:
     help->findChild<QPushButton*>("helpClose")->click(); QVERIFY(!help->isVisible());
   }
   void manualUsesEmbeddedGuideAndSiteOverride() {
+    QFile source(QFINDTESTDATA("../../docs/qtprobe-guide.md")), embedded(":/guide.md");
+    QVERIFY(source.open(QIODevice::ReadOnly)); QVERIFY(embedded.open(QIODevice::ReadOnly));
+    QCOMPARE(embedded.readAll(), source.readAll());
     HelpPathScope restore; UrlCapture capture; qunsetenv("QTPROBE_HELP_PATH");
     Options options; options.connectOnOpen = false; Window window(options);
     auto* action = window.findChild<QAction*>("manualAction"); QVERIFY(action); action->trigger();
@@ -936,6 +939,7 @@ private slots:
     QFile manual(capture.urls.back().toLocalFile()); QVERIFY(manual.open(QIODevice::ReadOnly));
     const auto html = manual.readAll();
     QVERIFY(html.contains("QtProbe User Manual")); QVERIFY(html.contains("pvAccess"));
+    QVERIFY(html.contains("QtProbe 0.1.0"));
     QVERIFY(html.contains("name=\"keyboard-shortcuts\"")); QVERIFY(html.contains("QTPROBE_HELP_PATH"));
     qputenv("QTPROBE_HELP_PATH", "https://example.org/manuals/QtProbe/");
     QCOMPARE(helpManualUrl(), QUrl("https://example.org/manuals/QtProbe/"));
@@ -947,10 +951,11 @@ private slots:
   }
   void aboutCreditsAnimationAndHelpHandoff() {
     Options options; options.connectOnOpen = false; Window window(options);
-    QString title, credits, footer; bool animated = false, saved = false;
+    QString title, subtitle, credits, footer; bool animated = false, saved = false;
     QTimer::singleShot(0, &window, [&] {
       auto* dialog = window.findChild<QDialog*>("aboutDialog"); if (!dialog) return;
       title = dialog->findChild<QLabel*>("aboutTitle")->text();
+      subtitle = dialog->findChild<QLabel*>("aboutSubtitle")->text();
       credits = dialog->findChild<QTextBrowser*>("aboutCredits")->toPlainText();
       footer = dialog->findChild<QLabel*>("aboutFooter")->text();
       animated = dialog->findChild<QTimer*>("aboutAnimationTimer")->isActive();
@@ -959,6 +964,7 @@ private slots:
     });
     window.findChild<QAction*>("aboutAction")->trigger();
     QCOMPARE(title, QString("QtProbe"));
+    QVERIFY(subtitle.contains("Version 0.1.0"));
     for (auto name : {"Robert Soliday", "Fred Vong", "Ken Evans"}) QVERIFY(credits.contains(name));
     QVERIFY(footer.contains(qVersion())); QVERIFY(footer.contains("EPICS")); QVERIFY(animated); QVERIFY(saved);
     auto* help = window.findChild<QDialog*>("helpWindow"); QVERIFY(help && help->isVisible());
