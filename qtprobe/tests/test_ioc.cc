@@ -242,6 +242,10 @@ private slots:
     process.start(exe, {"--info", "--json", "-w", "0.2", prefix + "does-not-exist"}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitCode(), 1);
     QVERIFY(QJsonDocument::fromJson(process.readAllStandardOutput()).isArray());
     process.start(exe, {"--info", "--max-elements", "0", prefix + "number"}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitCode(), 2);
+    // Argument errors are reported without a display.
+    auto bare = env; bare.remove("QT_QPA_PLATFORM"); process.setProcessEnvironment(bare);
+    process.start(exe, {"--json", prefix + "number"}); QVERIFY(process.waitForFinished(5000));
+    QCOMPARE(process.exitStatus(), QProcess::NormalExit); QCOMPARE(process.exitCode(), 2); process.setProcessEnvironment(env);
     // EPICS parses numbers (CA settings, PVA puts) with C rules in a decimal-comma locale.
     const std::string numeric = std::setlocale(LC_NUMERIC, nullptr);
     if (std::setlocale(LC_NUMERIC, "de_DE.UTF-8")) {

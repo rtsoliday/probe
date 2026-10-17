@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
   for (int i = 1; i < argc; ++i) {
     const auto arg = QByteArray(argv[i]);
     if (arg == "-style" || arg.startsWith("-style=")) explicitStyle = true;
-    if (arg == "--info" || arg == "-info" || arg == "--help" || arg == "--help-all" || arg == "-h" || arg == "--version" || arg == "-v") headless = true;
+    if (arg == "--info" || arg == "-info" || arg == "--json" || arg == "-json" || arg == "--help" || arg == "--help-all" || arg == "-h" || arg == "--version" || arg == "-v") headless = true;
   }
   std::unique_ptr<QCoreApplication> app;
   if (headless) app = std::make_unique<QCoreApplication>(argc, argv);
