@@ -242,6 +242,12 @@ private slots:
     process.start(exe, {"--info", "--json", "-w", "0.2", prefix + "does-not-exist"}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitCode(), 1);
     QVERIFY(QJsonDocument::fromJson(process.readAllStandardOutput()).isArray());
     process.start(exe, {"--info", "--max-elements", "0", prefix + "number"}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitCode(), 2);
+    // QtProbe reads --session itself; Qt reserves -session for session management.
+    QTemporaryDir sessions; QFile bad(sessions.filePath("bad.qtp")); QVERIFY(bad.open(QIODevice::WriteOnly)); bad.write(R"({"version":1,"pvs":["bad name"]})"); bad.close();
+    for (const char* option : {"--session", "-session"}) {
+      process.start(exe, {option, bad.fileName()}); QVERIFY(process.waitForFinished(10000));
+      QCOMPARE(process.exitCode(), 2); QVERIFY(process.readAllStandardError().contains("PV name"));
+    }
     // Argument errors are reported without a display.
     auto bare = env; bare.remove("QT_QPA_PLATFORM"); process.setProcessEnvironment(bare);
     process.start(exe, {"--json", prefix + "number"}); QVERIFY(process.waitForFinished(5000));

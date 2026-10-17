@@ -15,15 +15,23 @@
 #endif
 using namespace probe;
 int main(int argc, char** argv) {
-  bool headless = false, explicitStyle = false;
+  bool headless = false, explicitStyle = false, hasSession = false;
+  // Qt reserves -session for X11 session management and removes it with its
+  // value, so take QtProbe's --session file before Qt sees the arguments.
+  QString sessionFile;
+  std::vector<char*> args{argv[0]};
   for (int i = 1; i < argc; ++i) {
     const auto arg = QByteArray(argv[i]);
+    if ((arg == "--session" || arg == "-session") && i + 1 < argc) { hasSession = true; sessionFile = QString::fromLocal8Bit(argv[++i]); continue; }
+    if (arg.startsWith("--session=") || arg.startsWith("-session=")) { hasSession = true; sessionFile = QString::fromLocal8Bit(arg.mid(arg.indexOf('=') + 1)); continue; }
     if (arg == "-style" || arg.startsWith("-style=")) explicitStyle = true;
     if (arg == "--info" || arg == "-info" || arg == "--json" || arg == "-json" || arg == "--help" || arg == "--help-all" || arg == "-h" || arg == "--version" || arg == "-v") headless = true;
+    args.push_back(argv[i]);
   }
+  int count = int(args.size()); args.push_back(nullptr);
   std::unique_ptr<QCoreApplication> app;
-  if (headless) app = std::make_unique<QCoreApplication>(argc, argv);
-  else app = std::make_unique<QApplication>(argc, argv);
+  if (headless) app = std::make_unique<QCoreApplication>(count, args.data());
+  else app = std::make_unique<QApplication>(count, args.data());
   // Qt adopts the user's locale, but EPICS parses numbers with the C library
   // (pvData puts, CA environment settings), so keep C numeric conventions.
   std::setlocale(LC_NUMERIC, "C");
@@ -63,7 +71,7 @@ int main(int argc, char** argv) {
   try { for (const auto& name : names) Address::parse(name, options.provider); }
   catch (const std::exception& e) { QTextStream(stderr) << e.what() << '\n'; return 2; }
   if (parser.isSet("info")) {
-    if (names.isEmpty() || parser.isSet("session")) { QTextStream(stderr) << "--info requires PV names and cannot open a session.\n"; return 2; }
+    if (names.isEmpty() || hasSession || parser.isSet("session")) { QTextStream(stderr) << "--info requires PV names and cannot open a session.\n"; return 2; }
     // EPICS libraries print diagnostics on stdout (pvAccess uses printf).
     // Send them to stderr so stdout carries only the report.
     QFile report;
@@ -108,7 +116,7 @@ int main(int argc, char** argv) {
   }
   if (!explicitStyle) QApplication::setStyle("Fusion");
   Window window(options);
-  if (parser.isSet("session")) try { window.loadSession(parser.value("session")); }
+  if (hasSession || parser.isSet("session")) try { window.loadSession(hasSession ? sessionFile : parser.value("session")); }
   catch (const std::exception& e) { QTextStream(stderr) << e.what() << '\n'; return 2; }
   if (!names.isEmpty()) window.addPvs(names);
   window.show(); return app->exec();
