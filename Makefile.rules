@@ -64,7 +64,7 @@ else
 QMAKE6 ?= qmake6
 QMAKE5 := qmake
 endif
-QT_VERSION ?= $(if $(filter Windows,$(OS)),6,$(if $(or $(shell $(PKG_CONFIG) --exists Qt6Widgets 2>/dev/null && echo yes),$(shell $(QMAKE6) -query QT_VERSION 2>/dev/null)),6,5))
+QT_VERSION ?= $(if $(filter Windows,$(OS)),6,$(if $(or $(shell $(PKG_CONFIG) --exists Qt6Widgets 2>/dev/null && echo yes),$(if $(QMAKE6),$(shell $(QMAKE6) -query QT_VERSION 2>/dev/null))),6,5))
 QT_PREFIX := Qt$(QT_VERSION)
 QT_CFLAGS = $(shell $(PKG_CONFIG) --cflags $(addprefix $(QT_PREFIX),Core Gui Widgets Network) 2>/dev/null)
 QT_LIBS = $(shell $(PKG_CONFIG) --libs $(addprefix $(QT_PREFIX),Core Gui Widgets Network) 2>/dev/null)
@@ -76,8 +76,8 @@ HAVE_QT := $(shell $(PKG_CONFIG) --exists $(QT_PREFIX)Widgets 2>/dev/null && ech
 # Qt 6 distribution SDKs sometimes provide qmake6 but no pkg-config files.
 ifeq ($(HAVE_QT),)
 QMAKE ?= $(if $(filter 6,$(QT_VERSION)),$(QMAKE6),$(QMAKE5))
-QT_HEADERS := $(shell $(QMAKE) -query QT_INSTALL_HEADERS 2>/dev/null)
-QT_LIBRARY_DIR := $(shell $(QMAKE) -query QT_INSTALL_LIBS 2>/dev/null)
+QT_HEADERS := $(if $(QMAKE),$(shell $(QMAKE) -query QT_INSTALL_HEADERS 2>/dev/null))
+QT_LIBRARY_DIR := $(if $(QMAKE),$(shell $(QMAKE) -query QT_INSTALL_LIBS 2>/dev/null))
 ifneq ($(wildcard $(QT_HEADERS)/QtWidgets/QApplication),)
 HAVE_QT := 1
 QT_HOST_BINS := $(shell $(QMAKE) -query QT_HOST_BINS)
