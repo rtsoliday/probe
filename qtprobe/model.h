@@ -124,6 +124,7 @@ private:
   size_t capacity_, bytes_ = 0;
   quint64 nextSerial_ = 0;
   void popFront();
+  static void rebalance();
 };
 // Writes use exact decimal strings. Never convert 64-bit integers through double.
 QStringList parseWrite(const Snapshot&, const QString&, QString* error);

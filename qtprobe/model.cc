@@ -170,6 +170,8 @@ void flattenStructure(const FieldNode& root, QMap<QString, QString>& out, int li
 namespace {
 std::atomic<size_t> historyBytes{0}, historyBudget{size_t(256) << 20};
 std::atomic<int> historyCount{0};
+// Histories and their samples belong to Qt's application thread.
+QVector<History*> historyOwners;
 QString bounded(QString text) {
   if (text.size() > History::maxValueLength) { text.truncate(History::maxValueLength - 1); text += QChar(0x2026); }
   text.squeeze(); return text;
@@ -178,10 +180,19 @@ QString bounded(QString text) {
 size_t sampleBytes(const Sample& s) { return sizeof(Sample) + 48 + size_t(s.value.capacity()) * sizeof(QChar); }
 } // namespace
 // Single-event histories (Record fields, --info) take no share of the budget.
-History::History(size_t capacity) : capacity_(capacity) { if (capacity_ > 1) ++historyCount; }
-History::~History() { clear(); if (capacity_ > 1) --historyCount; }
+History::History(size_t capacity) : capacity_(capacity) {
+  if (capacity_ > 1) { historyOwners.append(this); ++historyCount; rebalance(); }
+}
+History::~History() { clear(); if (capacity_ > 1) { historyOwners.removeOne(this); --historyCount; } }
 size_t History::totalBytes() { return historyBytes; }
-void History::setMemoryBudget(size_t bytes) { historyBudget = std::max<size_t>(bytes, 1 << 20); }
+void History::setMemoryBudget(size_t bytes) { historyBudget = std::max<size_t>(bytes, 1 << 20); rebalance(); }
+void History::rebalance() {
+  const size_t share = historyBudget / size_t(std::max(1, int(historyCount)));
+  // Quiet PVs cannot wait for another event to release an obsolete share:
+  // opening more PVs would otherwise exceed the shared budget repeatedly.
+  for (auto* history : historyOwners)
+    while (history->samples.size() > 1 && history->bytes_ > share) history->popFront();
+}
 void History::popFront() { bytes_ -= sampleBytes(samples.front()); historyBytes -= sampleBytes(samples.front()); samples.pop_front(); }
 void History::clear() { historyBytes -= bytes_; bytes_ = 0; samples.clear(); }
 void History::append(const Snapshot& s) {

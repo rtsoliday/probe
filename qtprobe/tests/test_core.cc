@@ -147,10 +147,16 @@ private slots:
       for (int i = 0; i < 100000; ++i) { s.number = i; s.values = QStringList{QString::number(i)}; a.append(s); }
       QVERIFY(a.samples.size() < 100000); QVERIFY(a.bytes() <= (size_t(1) << 20)); QCOMPARE(History::totalBytes(), a.bytes());
       QCOMPARE(a.samples.back().value, QString("99999")); QCOMPARE(a.samples.back().timestamp(), QString("2023-11-14T22:13:20.000000000Z"));
-      // A second PV gets half; the first trims to its share on its next event.
+      // A second PV gets half; the first trims even if it receives no more events.
       History b(1000000);
+      // A quiet PV must release its old share immediately too.
+      QVERIFY(a.bytes() <= (size_t(1) << 19));
       for (int i = 0; i < 100000; ++i) b.append(s);
       QVERIFY(b.bytes() <= (size_t(1) << 19)); a.append(s); QVERIFY(a.bytes() <= (size_t(1) << 19));
+      QVERIFY(History::totalBytes() <= (size_t(1) << 20));
+      History::setMemoryBudget(size_t(2) << 20);
+      for (int i = 0; i < 100000; ++i) a.append(s);
+      History::setMemoryBudget(size_t(1) << 20);
       QVERIFY(History::totalBytes() <= (size_t(1) << 20));
       // Long strings are stored shortened; the count limit still applies.
       Snapshot text = s; text.longString = true; text.text = QString(16384, 'x');
