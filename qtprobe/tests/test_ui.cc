@@ -358,6 +358,16 @@ private slots:
     QMouseEvent move(QEvent::MouseMove, where + QPoint(40, 0), Qt::NoButton, Qt::MiddleButton, Qt::NoModifier); QApplication::sendEvent(tabs, &move);
     QCOMPARE(window.inspectors()->count(), 1);
   }
+  void pausedEnumMenuStagesTheShownState() {
+    // Paused, the menu keeps the old state list; picking a state still stages that state after the list changed.
+    Options options; options.connectOnOpen = false; Inspector inspector(Address::parse("E:paused"), options); inspector.show();
+    Snapshot s = inspector.channel()->snapshot; s.connected = s.readable = s.writable = s.hasValue = s.numeric = true; s.type = "DBF_ENUM";
+    s.choices = QStringList{"Off", "On", "Standby"}; s.values = QStringList{"0"}; s.number = 0; s.count = 1; s.sequence = 1; inspector.channel()->update(s); inspector.refresh();
+    inspector.findChild<QToolButton*>("pauseDisplay")->setChecked(true);
+    s.choices = QStringList{"Standby", "Off", "On"}; ++s.sequence; inspector.channel()->update(s); inspector.refresh();
+    emit inspector.findChild<QComboBox*>("enumChoice")->activated(2);  // "Standby" in the menu shown
+    QString error; QCOMPARE(parseWrite(inspector.channel()->snapshot, inspector.findChild<QLineEdit*>("writeValue")->text(), &error), QStringList{"0"});
+  }
   void confirmationShowsWhatIsSent() {
     // The question names enum states by label and counts array elements.
     Options options; options.connectOnOpen = false; Inspector inspector(Address::parse("C:gain"), options); inspector.show();

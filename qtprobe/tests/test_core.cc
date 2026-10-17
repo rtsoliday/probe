@@ -100,7 +100,7 @@ private slots:
       QCOMPARE(parseWrite(s, enumWriteText(s.choices, i), &error), QStringList{QString::number(i)});
       s.values = QStringList{QString::number(i)}; QCOMPARE(parseWrite(s, s.editText(), &error), s.values);
     }
-    QCOMPARE(enumWriteText(QStringList{"Off", "On"}, 1), QString("1"));
+    QCOMPARE(enumWriteText(QStringList{"Off", "On"}, 1), QString("On")); QCOMPARE(enumWriteText(QStringList{"Off", ""}, 1), QString("1"));
     QCOMPARE(enumWriteText(QStringList{"x", "x", "1"}, 1), QString());
     // A blank label is never selected by an empty editor.
     s.choices = QStringList{"", "On"}; parseWrite(s, "", &error); QVERIFY(!error.isEmpty()); QCOMPARE(parseWrite(s, "0", &error), QStringList{"0"});

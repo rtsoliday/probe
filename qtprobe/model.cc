@@ -329,10 +329,11 @@ QStringList parseWrite(const Snapshot& s, const QString& text, QString* error) {
   return values;
 }
 QString enumWriteText(const QStringList& choices, int index) {
-  const auto number = QString::number(index);
-  if (!choices.contains(number)) return number;
+  // The label, when it selects this state, still means it if the state list
+  // changes before the write (a paused display keeps the old list).
   if (index >= 0 && index < choices.size() && !choices[index].trimmed().isEmpty() && choices.indexOf(choices[index]) == index) return choices[index];
-  return {};
+  const auto number = QString::number(index);
+  return choices.contains(number) ? QString() : number;
 }
 std::deque<WriteRecord>& writeLog() { static std::deque<WriteRecord> log; return log; }
 void logWrite(WriteRecord record) {

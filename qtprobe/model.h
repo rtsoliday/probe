@@ -127,8 +127,8 @@ private:
 };
 // Writes use exact decimal strings. Never convert 64-bit integers through double.
 QStringList parseWrite(const Snapshot&, const QString&, QString* error);
-// Text that parseWrite reads as enum state index (a label wins over an index
-// that reads the same); empty when no text selects that state.
+// Text that parseWrite reads as enum state index: its label when that selects
+// it, else the index; empty when no text selects that state.
 QString enumWriteText(const QStringList& choices, int index);
 // Writes and record processing requested in this process, newest last.
 // At most 1000 records; each text field is limited like history values.
