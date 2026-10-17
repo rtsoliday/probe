@@ -95,6 +95,11 @@ private slots:
     QSignalSpy writes(inspector.channel(), &Channel::writeFinished);
     inspector.findChild<QSlider*>("adjustSlider")->setValue(2500);
     QCOMPARE(inspector.findChild<QLineEdit*>("writeValue")->text(), QString("25")); QCOMPARE(writes.size(), 0);
+    // A wheel over an unfocused slider scrolls the page and leaves the edit alone.
+    inspector.findChild<QLineEdit*>("writeValue")->setText("5");
+    QWheelEvent wheel(QPointF(5, 5), QPointF(5, 5), QPoint(), QPoint(0, -120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(inspector.findChild<QSlider*>("adjustSlider"), &wheel);
+    QCOMPARE(inspector.findChild<QLineEdit*>("writeValue")->text(), QString("5")); QCOMPARE(inspector.findChild<QSlider*>("adjustSlider")->value(), 2500);
     inspector.findChild<QToolButton*>("infoToggle")->click(); QVERIFY(!inspector.findChild<QWidget*>("infoSection")->isHidden());
     QCOMPARE(inspector.sections(), int(InfoSection)); QCOMPARE(QSettings().value("sections").toInt(), int(InfoSection));
     auto filter = inspector.findChild<QLineEdit*>("metadataFilter"); filter->setText("Provider");
@@ -324,6 +329,12 @@ private slots:
     // Ordinary numbers keep a continuous plot and numeric statistics.
     auto* value = inspectorAt(window, 1); publishDemo(value, 0, 10); window.findChild<QTabBar*>("pvTabs")->setCurrentIndex(1); value->refresh();
     QVERIFY(value->findChild<Plot*>("trendPlot")->levels.isEmpty()); QVERIFY(value->findChild<QLabel*>("trendStatistics")->text().contains("Mean"));
+    // A wheel over the unfocused state list does not stage another state.
+    s.writable = true; ++s.sequence; mode->channel()->update(s); window.findChild<QTabBar*>("pvTabs")->setCurrentIndex(0); mode->refresh();
+    auto* edit = mode->findChild<QLineEdit*>("writeValue"); edit->setText("On"); auto* states = mode->findChild<QComboBox*>("enumChoice");
+    QVERIFY(states->isEnabled()); QCOMPARE(states->currentIndex(), 1);
+    QWheelEvent wheel(QPointF(5, 5), QPointF(5, 5), QPoint(), QPoint(0, 120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(states, &wheel); QCOMPARE(edit->text(), QString("On")); QCOMPARE(states->currentIndex(), 1);
     QSettings().setValue("sections", 0);
   }
   void nameEntryOpensExactlyWhatWasTyped() {

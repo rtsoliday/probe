@@ -440,6 +440,8 @@ Inspector::Inspector(Address address, Options options, QWidget* parent) : QWidge
   dial = new QDial; dial->setRange(0, 10000); dial->setFixedSize(80, 80); dial->setNotchesVisible(true); dial->setAccessibleName("Stage a value with the dial"); dial->hide(); adjustPanel.content->addWidget(dial, 0, Qt::AlignHCenter);
   connect(showDial, &QToolButton::toggled, this, [this](bool b) { dial->setVisible(b); checkLayout(); });
   connect(slider, &QSlider::valueChanged, this, [this](int v) { stagePosition(v); }); connect(dial, &QDial::valueChanged, this, [this](int v) { stagePosition(v); });
+  // Scrolling the page over a staging control must not replace the edit.
+  for (QWidget* control : std::initializer_list<QWidget*>{slider, dial, enumChoice}) { control->setFocusPolicy(Qt::StrongFocus); control->installEventFilter(this); }
   connect(low, &QDoubleSpinBox::editingFinished, this, [this] { automaticLimits = false; }); connect(high, &QDoubleSpinBox::editingFinished, this, [this] { automaticLimits = false; });
   auto infoPanel = section(2, "infoSection", "INFORMATION", 3);
   filter = new QLineEdit; filter->setObjectName("metadataFilter"); filter->setPlaceholderText("Find a field or value…"); filter->setClearButtonEnabled(true); filter->setAccessibleName("Filter PV information"); infoPanel.header->addWidget(filter, 1);
@@ -524,6 +526,10 @@ void Inspector::requestProcess() {
   channel_->process();
 }
 bool Inspector::eventFilter(QObject* object, QEvent* event) {
+  // Staging controls take the wheel only when focused; otherwise the page scrolls.
+  if (event->type() == QEvent::Wheel && (object == slider || object == dial || object == enumChoice) && !static_cast<QWidget*>(object)->hasFocus()) {
+    QCoreApplication::sendEvent(scroll->viewport(), event); return true;
+  }
   // Drag the PV name into QtEDM, QtStripTool or another QtProbe.
   if (object == heading && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseMove)) {
     auto* mouse = static_cast<QMouseEvent*>(event);
