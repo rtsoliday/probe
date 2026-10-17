@@ -85,7 +85,14 @@ int main(int argc, char** argv) {
   QJsonObject result{{"provider", provider}, {"pvs", count}, {"view", view}, {"history_preload", preload},
       {"wall_ms", wallMs}, {"cpu_ms", cpuMs}, {"cpu_percent_one_core", 100 * cpuMs / wallMs},
       {"delivered_updates", double(afterSequence - beforeSequence)}, {"qt_platform", QApplication::platformName()},
-      {"history_mb", History::totalBytes() / 1048576.0}, {"max_rss_mb", [] { rusage u{}; getrusage(RUSAGE_SELF, &u); return u.ru_maxrss / 1024.0; }()}};
+      {"history_mb", History::totalBytes() / 1048576.0}, {"max_rss_mb", [] {
+        rusage u{}; getrusage(RUSAGE_SELF, &u);
+#ifdef Q_OS_MACOS
+        return u.ru_maxrss / 1048576.0; // Darwin reports bytes; Linux reports KiB.
+#else
+        return u.ru_maxrss / 1024.0;
+#endif
+      }()}};
   app.profile = false;
   if (parser.isSet("profile-events")) { QJsonObject events; for (auto it = app.eventCpu.cbegin(); it != app.eventCpu.cend(); ++it) events[it.key()] = it.value(); result["inclusive_event_cpu_ms"] = events; }
   QTextStream(stdout) << QJsonDocument(result).toJson(QJsonDocument::Compact) << '\n';
