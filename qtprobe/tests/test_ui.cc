@@ -326,6 +326,17 @@ private slots:
     QVERIFY(value->findChild<Plot*>("trendPlot")->levels.isEmpty()); QVERIFY(value->findChild<QLabel*>("trendStatistics")->text().contains("Mean"));
     QSettings().setValue("sections", 0);
   }
+  void nameEntryOpensExactlyWhatWasTyped() {
+    // Recent names that extend the typed text, or differ only in case, are not substituted.
+    Options options; options.connectOnOpen = false; Window window(options); window.show(); QApplication::setActiveWindow(&window);
+    window.addPvs({"SR:Q10", "Ring:Current"}); while (window.inspectors()->count()) window.closePv(0);
+    auto* name = window.findChild<QComboBox*>("pvName");
+    for (const QString typed : {"ca://SR:Q1", "ca://ring:current"}) {
+      name->lineEdit()->clear(); name->lineEdit()->setFocus(); QTest::keyClicks(name->lineEdit(), typed); QTest::keyClick(name->lineEdit(), Qt::Key_Return);
+      QCOMPARE(window.inspectors()->count(), 1); QCOMPARE(inspectorAt(window, 0)->channel()->snapshot.name, Address::parse(typed).name);
+      window.closePv(0);
+    }
+  }
   void structureMenuSurvivesUpdates() {
     // An update while a field's menu is open replaces the tree; the chosen action uses the live rows.
     QSettings().setValue("sections", int(StructureSection));

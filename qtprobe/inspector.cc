@@ -719,7 +719,11 @@ Window::Window(Options o) : options(o) {
   if (o.readOnly) { auto* ro = label("Read only", "badge", 0.84); ro->setObjectName("readOnlyBadge"); ro->setToolTip("Writes are disabled in this session"); setTone(ro, "warning"); entry->addWidget(ro); }
   layout->addLayout(entry);
   entryError = wrappingLabel({}, "muted"); entryError->setObjectName("entryError"); entryError->hide(); setTone(entryError, "negative"); layout->addWidget(entryError);
-  connect(open, &QPushButton::clicked, this, [this] { addPv(name->currentText()); }); connect(name->lineEdit(), &QLineEdit::returnPressed, this, [this] { addPv(name->currentText()); });
+  // EPICS names are case-sensitive and often prefixes of one another: recent
+  // names are offered in a popup and never replace or complete the typed text.
+  name->setInsertPolicy(QComboBox::NoInsert);
+  name->completer()->setCaseSensitivity(Qt::CaseSensitive); name->completer()->setCompletionMode(QCompleter::PopupCompletion);
+  connect(open, &QPushButton::clicked, this, [this] { addPv(name->lineEdit()->text()); }); connect(name->lineEdit(), &QLineEdit::returnPressed, this, [this] { addPv(name->lineEdit()->text()); });
   // Tab 0 is the All PVs table; tab n inspects stack page n - 1.
   pvTabs = new PvTabBar; pvTabs->setObjectName("pvTabs"); pvTabs->setDrawBase(false); pvTabs->setExpanding(false); pvTabs->setUsesScrollButtons(true);
   pvTabs->setElideMode(Qt::ElideMiddle); pvTabs->setContextMenuPolicy(Qt::CustomContextMenu); pvTabs->setAccessibleName("Open process variables");
