@@ -602,6 +602,28 @@ private slots:
     inspector.refresh(); QVERIFY(!undo->isEnabled()); QVERIFY(undo->toolTip().contains("type"));
     ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
   }
+  void confirmationCannotReinterpretAnEdit() {
+    for (const auto& provider : providers()) {
+      Options options; options.provider = provider;
+      Inspector inspector(Address::parse(prefix + "enum", provider), options); inspector.show();
+      auto* channel = inspector.channel();
+      QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.hasValue && channel->snapshot.writable && channel->snapshot.choices.size() == 3, 10000);
+      const auto before = channel->snapshot.number;
+      QSignalSpy done(channel, &Channel::writeFinished);
+      QString confirmed;
+      inspector.confirm = [&](const QString& question) {
+        confirmed = question;
+        // A modal confirmation runs the event loop: an IOC can change its
+        // schema or enum choices before the operator presses Yes.
+        auto changed = channel->snapshot;
+        changed.choices = QStringList{"Off", "Standby", "On"}; channel->update(changed);
+        return true;
+      };
+      inspector.requestWrite("On"); QTest::qWait(200); QVERIFY(confirmed.contains("state 1"));
+      QCOMPARE(done.size(), 0); QCOMPARE(channel->snapshot.number, before);
+      QVERIFY(inspector.findChild<QLabel*>("writeStatus")->text().contains("changed"));
+    }
+  }
   void cleanupTestCase() {
     ioc.terminate(); if (!ioc.waitForFinished(3000)) { ioc.kill(); ioc.waitForFinished(); } saveLog();
     repeater.terminate(); if (!repeater.waitForFinished(3000)) { repeater.kill(); repeater.waitForFinished(); }

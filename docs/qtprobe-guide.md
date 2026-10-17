@@ -240,7 +240,9 @@ the PROC field is connected and writable, and never in a read-only session.
 
 **Tools → Confirm before writing** asks before each write, Undo and Process,
 showing the new and current values as they are sent (enum states with their
-labels, arrays with their element counts); the setting is remembered. **Tools → Write
+labels, arrays with their element counts); the setting is remembered. If the PV's
+type, states or array format changes while the question is open, the write is
+refused; check the PV and enter the value again. **Tools → Write
 log** lists every write and Process requested in this session, newest first,
 with the time, PV, value before, value written and the result, including
 failures and refusals. **Export CSV…** saves the log; **Clear** empties it. The

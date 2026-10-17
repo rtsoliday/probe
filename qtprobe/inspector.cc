@@ -544,8 +544,22 @@ void Inspector::requestUndo() {
 }
 bool Inspector::beginWrite(const QStringList& sent, const QString& after, bool ask) {
   const auto& s = channel_->snapshot;
-  const auto current = s.hasValue ? s.editText() : QString();
-  if (ask && confirm && !confirm(QString("Write %1 to %2?\nCurrent value: %3").arg(sentText(s, sent, after), s.name, s.hasValue ? sentText(s, s.values, current) : preview(current)))) return false;
+  auto current = s.hasValue ? s.editText() : QString();
+  if (ask && confirm) {
+    const auto shown = s;
+    if (!confirm(QString("Write %1 to %2?\nCurrent value: %3").arg(sentText(s, sent, after), s.name, s.hasValue ? sentText(s, s.values, current) : preview(current)))) return false;
+    // A modal question runs the event loop. Never reinterpret the approved
+    // edit using a different type, enum list or byte/text mode afterwards.
+    if (s.type != shown.type || s.choices != shown.choices || s.array != shown.array ||
+        s.bytes != shown.bytes || s.longString != shown.longString || s.capacity != shown.capacity) {
+      lastWriteMessage = "The PV's type, states or array format changed during confirmation; check it and enter the value again.";
+      lastWriteOK = false;
+      logWrite({QDateTime::currentDateTime(), s.provider + "://" + s.name, s.hasValue ? s.editText() : QString(), after, lastWriteMessage, false});
+      if (logged) logged();
+      refreshWriteControls(); return false;
+    }
+    current = s.hasValue ? s.editText() : QString();
+  }
   pendingLog = true; pendingProcess = false; pendingBefore = current; pendingAfter = after;
   // Undo restores these exact elements; a truncated readback, or text decoded
   // from bytes that were not UTF-8, cannot be restored.
