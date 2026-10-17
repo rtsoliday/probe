@@ -218,6 +218,7 @@ public:
     if (dirty) { dirty = false; owner.update(s); }
     if (putDone) { putDone = false; owner.completeWrite(putOK, putMessage, putUncertain); }
   }
+  void detach() override { closing = true; }
   void refetch() override {
     if (!id || ca_state(id) != cs_conn) return;
     fail(ca_array_get_callback(dbf_type_to_DBR_TIME(ca_field_type(id)), 0, id, value, this)); ca_flush_io();

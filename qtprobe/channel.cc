@@ -14,6 +14,7 @@ Channel::Channel(Address a, bool ro, int maxElements, int historySize, double ti
   });
   deadline.setSingleShot(true);
   connect(&deadline, &QTimer::timeout, this, [this] {
+    previous.reset();
     if (!snapshot.hasValue) {
       snapshot.error = "Connection/read timeout; discovery continues automatically.";
       emit changed();
@@ -24,9 +25,15 @@ Channel::Channel(Address a, bool ro, int maxElements, int historySize, double ti
     completeWrite(false, "Write completion timed out; outcome unknown. Check readback and reconnect before retrying.", true);
   });
 }
-Channel::~Channel() { timer.stop(); connection.reset(); }
+Channel::~Channel() { timer.stop(); connection.reset(); previous.reset(); }
 void Channel::start() {
+  // Make before break for CA: clearing the PV's last channel on a circuit
+  // closes it, and CA could attach the new channel to the closing circuit and
+  // leave it disconnected for up to 10 s.
+  std::unique_ptr<Connection> keep;
+  if (address.provider != "pva" && connection) { connection->detach(); keep = std::move(connection); }
   stop();
+  previous = std::move(keep);
   writeUncertain_ = false;
   snapshot = {}; snapshot.name = address.name; snapshot.provider = address.provider;
   emit changed();
@@ -43,7 +50,7 @@ void Channel::requestPoll() {
 }
 void Channel::stop() {
   timer.stop(); deadline.stop(); writeDeadline.stop();
-  connection.reset();
+  connection.reset(); previous.reset();
   if (writePending_) completeWrite(false, "Disconnected before write completion; outcome unknown.", true);
   if (snapshot.connected) {
     auto s = snapshot; s.connected = s.readable = s.writable = false; s.error = "Stopped"; update(s);
@@ -52,6 +59,7 @@ void Channel::stop() {
 void Channel::update(Snapshot s) {
   const bool event = (s.hasValue && s.sequence != snapshot.sequence) || s.connected != snapshot.connected || s.readable != snapshot.readable;
   if (s.hasValue) deadline.stop();
+  if (s.connected) previous.reset();
   if (s.bytes) s.decodeBytes();
   if (event && s.hasValue && s.sequence != snapshot.sequence) lastUpdateMs = QDateTime::currentMSecsSinceEpoch();
   snapshot = std::move(s);

@@ -13,6 +13,8 @@ public:
   virtual void process() { throw std::runtime_error("Record processing is available for Channel Access PVs only"); }
   // Reads the current value again, for fields the server does not post.
   virtual void refetch() {}
+  // Ignores further events; the connection only stays open until released.
+  virtual void detach() {}
 };
 class Channel final : public QObject {
   Q_OBJECT
@@ -54,6 +56,9 @@ private:
   double timeout_;
   QTimer timer, deadline, writeDeadline;
   std::unique_ptr<Connection> connection;
+  // A detached CA connection kept by start() until the new one connects, so a
+  // circuit used only by this PV stays up instead of being reused while closing.
+  std::unique_ptr<Connection> previous;
 };
 std::unique_ptr<Connection> createCa(Channel&, const Address&, int);
 std::unique_ptr<Connection> createPva(Channel&, const Address&, int);

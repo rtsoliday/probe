@@ -492,6 +492,16 @@ private slots:
       auto* undo = latin.findChild<QPushButton*>("undoWriteButton"); QVERIFY(!undo->isEnabled()); QVERIFY(undo->toolTip().contains("UTF-8"));
     }
   }
+  void reconnectKeepsTheCircuit() {
+    // Reconnect of the only channel on an IOC, while another CA PV is open, connects again at once.
+    Channel other({"QtProbeTest:unreachable:" + prefix, "ca"}, true); other.start();
+    Channel c({prefix + "number", "ca"}, true); c.start(); QTRY_VERIFY_WITH_TIMEOUT(c.snapshot.hasValue, 10000);
+    for (int round = 0; round < 3; ++round) {
+      QElapsedTimer elapsed; elapsed.start(); c.start();
+      QTRY_VERIFY_WITH_TIMEOUT(c.snapshot.connected && c.snapshot.hasValue, 15000);
+      QVERIFY2(elapsed.elapsed() < 3000, qPrintable(QString("reconnect took %1 ms").arg(elapsed.elapsed())));
+    }
+  }
   void reconnectAfterIocRestart() {
     std::vector<std::unique_ptr<Channel>> channels;
     for (const auto& provider : providers()) { auto c = std::make_unique<Channel>(Address{prefix + "number", provider}); c->start(); channels.push_back(std::move(c)); }
