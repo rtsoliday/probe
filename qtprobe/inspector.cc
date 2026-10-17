@@ -615,7 +615,11 @@ void Inspector::refreshWriteControls() {
   else if (!s.writable) message = "The server does not allow writes to this PV.";
   else if (channel_->writePending()) message = "Writing… waiting for server completion.";
   else if (channel_->writeUncertain()) { message = "Write outcome is uncertain. Check readback and reconnect before retrying."; tone = "warning"; }
-  else if (!lastWriteMessage.isEmpty()) { message = lastWriteMessage; tone = lastWriteOK ? "positive" : "negative"; }
+  else if (!lastWriteMessage.isEmpty()) {
+    // A completion with a note (the server shortened the value) is a warning.
+    message = lastWriteMessage;
+    tone = !lastWriteOK ? "negative" : message == "Write completed" || message == "Record processed" ? "positive" : "warning";
+  }
   else message = s.longString ? "Enter text. Writing replaces the whole string." : s.array ? "Enter a JSON array. Writing replaces the value array." : "Enter or Write sends the value. Adjust and enum choices only stage it.";
   writeStatus->setText(message); writeStatus->setToolTip(message); setTone(writeStatus, tone);
   checkLayout();

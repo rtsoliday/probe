@@ -240,6 +240,10 @@ state. CA strings hold at most 39 encoded bytes. Array writes
 use JSON: `[1, 2, 3]` or `["one", "two"]`. Quote integers above 2^53−1, for
 example `["18446744073709551615"]`, to avoid JSON numeric precision loss.
 Array writes replace the value array; empty array writes are not supported.
+A pvAccess server may shorten a string or array to its field size without an
+error (QSRV keeps 39 bytes of a string field and NELM elements), so QtProbe
+reads PVA string and array writes back and the result line says when the
+server kept less than was sent.
 Arbitrary PVA structures/unions are inspection only unless they contain a
 supported scalar/array `value` or NTEnum `value.index`.
 

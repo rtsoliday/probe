@@ -178,12 +178,15 @@ Snapshot extract(const pvd::PVStructure& data, int limit) {
   return s;
 }
 struct Event {
-  enum Kind { Connected, Disconnected, Data, Error, PutReady, PutDone } kind;
+  enum Kind { Connected, Disconnected, Data, Error, PutReady, PutDone, GetDone } kind;
   bool ok = true;
   QString message;
   Snapshot snapshot;
   pvd::StructureConstPtr structure;
   quint64 epoch = 0;
+  // GetDone: the stored array length, or the stored scalar text.
+  size_t stored = 0;
+  std::string storedText;
   explicit Event(Kind k, bool success = true, QString msg = {}) : kind(k), ok(success), message(std::move(msg)) {}
 };
 struct Inbox {
@@ -256,7 +259,16 @@ struct PutRequester : pva::ChannelPutRequester {
   void putDone(const pvd::Status& status, const pva::ChannelPut::shared_pointer&) override {
     Event e(Event::PutDone, status.isSuccess(), QString::fromStdString(status.getMessage())); e.epoch = epoch; inbox->post(std::move(e));
   }
-  void getDone(const pvd::Status&, const pva::ChannelPut::shared_pointer&, const pvd::PVStructure::shared_pointer&, const pvd::BitSet::shared_pointer&) override {}
+  void getDone(const pvd::Status& status, const pva::ChannelPut::shared_pointer&, const pvd::PVStructure::shared_pointer& data, const pvd::BitSet::shared_pointer&) override {
+    Event e(Event::GetDone, status.isSuccess() && data, QString::fromStdString(status.getMessage())); e.epoch = epoch;
+    if (e.ok) {
+      auto value = data->getSubField("value");
+      if (auto array = std::dynamic_pointer_cast<pvd::PVScalarArray>(value)) e.stored = array->getLength();
+      else if (auto scalar = std::dynamic_pointer_cast<pvd::PVScalar>(value)) e.storedText = scalar->getAs<std::string>();
+      else e.ok = false;
+    }
+    inbox->post(std::move(e));
+  }
 };
 QString validate(QString text, pvd::ScalarType type) {
   if (type == pvd::pvString) return text;
@@ -299,9 +311,12 @@ class Pva final : public Connection {
   pva::MonitorPtr monitor;
   pva::ChannelPut::shared_pointer put;
   pvd::StructureConstPtr putStructure;
+  // Servers may shorten strings and arrays without an error (QSRV keeps 39
+  // bytes of a DBF_STRING and NELM elements), so such writes are read back.
+  struct Check { bool active = false, text = false; size_t sent = 0; std::string value; } check;
   void clearOperations() {
     ++epoch;
-    putStructure.reset();
+    putStructure.reset(); check = {};
     if (monitor) monitor->destroy();
     monitor.reset(); monitorRequester.reset();
     if (put) put->destroy();
@@ -365,7 +380,19 @@ public:
           s.writable = value && (value->getField()->getType() == pvd::scalar || value->getField()->getType() == pvd::scalarArray) && channel->getAccessRights(value) == pva::readWrite;
         } else { s.writable = false; s.fields["Write setup"] = e.message; }
         break;
-      case Event::PutDone: owner.completeWrite(e.ok, e.message); break;
+      case Event::PutDone:
+        if (e.ok && check.active && put) { put->get(); break; }
+        check = {}; owner.completeWrite(e.ok, e.message); break;
+      case Event::GetDone: {
+        if (!check.active) break;
+        QString note = "Write completed";
+        if (!e.ok) note += "; the readback check failed. Check the readback.";
+        else if (check.text && e.storedText.size() < check.value.size() && check.value.compare(0, e.storedText.size(), e.storedText) == 0)
+          note += QString(", but the server kept only %1 of %2 bytes (field size). Check the readback.").arg(e.storedText.size()).arg(check.sent);
+        else if (!check.text && e.stored < check.sent)
+          note += QString(", but the server kept only %1 of %2 elements (field size). Check the readback.").arg(e.stored).arg(check.sent);
+        check = {}; owner.completeWrite(true, note); break;
+      }
       case Event::Error: s.error = e.message; break;
       }
       owner.update(s);
@@ -377,13 +404,19 @@ public:
     auto data = pvd::getPVDataCreate()->createPVStructure(putStructure);
     auto value = data->getSubField("value");
     if (value && value->getField()->getType() == pvd::structure) value = data->getSubField("value.index");
-    if (auto scalar = std::dynamic_pointer_cast<pvd::PVScalar>(value))
-      scalar->putFrom<std::string>(validate(values[0], scalar->getScalar()->getScalarType()).toStdString());
-    else if (auto array = std::dynamic_pointer_cast<pvd::PVScalarArray>(value)) {
+    Check next;
+    if (auto scalar = std::dynamic_pointer_cast<pvd::PVScalar>(value)) {
+      const auto type = scalar->getScalar()->getScalarType();
+      const auto text = validate(values[0], type).toStdString();
+      scalar->putFrom<std::string>(text);
+      if (type == pvd::pvString) next = {true, true, text.size(), text};
+    } else if (auto array = std::dynamic_pointer_cast<pvd::PVScalarArray>(value)) {
       pvd::shared_vector<std::string> input;
       for (const auto& v : values) input.push_back(validate(v, array->getScalarArray()->getElementType()).toStdString());
+      next = {true, false, input.size(), {}};
       array->putFrom<std::string>(pvd::freeze(input));
     } else throw std::runtime_error("This PVA structure is inspection only");
+    check = std::move(next);
     pvd::BitSet::shared_pointer bits(new pvd::BitSet);
     bits->set(pvd::uint32(value->getFieldOffset()));
     put->put(data, bits);

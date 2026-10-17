@@ -99,8 +99,10 @@ private slots:
       e.write("Standby"); QTRY_COMPARE(e.snapshot.number, 2.0);
       e.write("On"); QTRY_COMPARE(e.snapshot.number, 1.0);
       Channel t({prefix + "text", provider}); t.start(); QTRY_VERIFY(t.snapshot.hasValue && t.snapshot.writable);
-      t.write("value, \"quoted\""); QTRY_COMPARE(t.snapshot.values.value(0), QString("value, \"quoted\""));
-      t.write("hello"); QTRY_COMPARE(t.snapshot.values.value(0), QString("hello"));
+      // Each write completes (PVA string writes are read back) before the next one.
+      QSignalSpy textWrites(&t, &Channel::writeFinished);
+      t.write("value, \"quoted\""); QTRY_COMPARE(t.snapshot.values.value(0), QString("value, \"quoted\"")); QTRY_COMPARE(textWrites.size(), 1); QVERIFY(textWrites[0][0].toBool());
+      t.write("hello"); QTRY_COMPARE(t.snapshot.values.value(0), QString("hello")); QTRY_COMPARE(textWrites.size(), 2);
       Channel n({prefix + "integer", provider}); n.start(); QTRY_VERIFY(n.snapshot.hasValue && n.snapshot.writable);
       QCOMPARE(n.snapshot.values[0], QString("2147483647"));
       QSignalSpy invalid(&n, &Channel::writeFinished); n.write("2147483648"); QTRY_COMPARE(invalid.size(), 1); QVERIFY(!invalid[0][0].toBool());
@@ -441,6 +443,21 @@ private slots:
       // Entered again while the array shows text, the same characters are written as text.
       input->clear(); input->setText("[7, 8, 9]"); bytes.findChild<QPushButton*>("writeButton")->click(); QTRY_COMPARE(done.size(), 1); QTRY_COMPARE(raw.snapshot.text, QString("[7, 8, 9]"));
     }
+  }
+  void pvaServerTruncationIsReported() {
+#if QTPROBE_HAVE_PVA
+    // QSRV shortens strings and arrays to the field size without an error; the result says so.
+    Channel text({prefix + "text", "pva"}), array({prefix + "array", "pva"}); text.start(); array.start();
+    QTRY_VERIFY_WITH_TIMEOUT(text.snapshot.writable && array.snapshot.writable, 10000);
+    QSignalSpy textDone(&text, &Channel::writeFinished), arrayDone(&array, &Channel::writeFinished);
+    text.write(QString(60, 'S')); QTRY_COMPARE(textDone.size(), 1); QVERIFY(textDone[0][0].toBool());
+    QVERIFY2(textDone[0][1].toString().contains("kept only 39 of 60 bytes"), qPrintable(textDone[0][1].toString()));
+    text.write("hello"); QTRY_COMPARE(textDone.size(), 2); QCOMPARE(textDone[1][1].toString(), QString("Write completed"));
+    array.write("[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]"); QTRY_COMPARE(arrayDone.size(), 1); QVERIFY(arrayDone[0][0].toBool());
+    QVERIFY2(arrayDone[0][1].toString().contains("kept only 8 of 10 elements"), qPrintable(arrayDone[0][1].toString()));
+#else
+    QSKIP("Built without pvAccess");
+#endif
   }
   void invalidUtf8IsNotRewritten() {
     for (const auto& provider : providers()) {
