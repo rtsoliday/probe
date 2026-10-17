@@ -44,6 +44,10 @@ def ports():
 def main():
     binary = str(Path(sys.argv[1]).resolve())
     epics = Path(os.environ.get("EPICS_TEST_BIN", "/usr/local/oag/base/bin/linux-x86_64"))
+    fixtures = Path(__file__).resolve().parent
+    database, access = fixtures / "fixture.db", fixtures / "fixture.acf"
+    if not database.is_file() or not access.is_file():
+        raise RuntimeError("The benchmark requires tests/fixture.db and tests/fixture.acf")
     base = ports()
     # Inherited name servers would bypass the loopback address lists.
     env = {k: v for k, v in os.environ.items() if k not in ("EPICS_CA_NAME_SERVERS", "EPICS_PVA_NAME_SERVERS")}
@@ -70,7 +74,9 @@ def main():
         with (temp / "ioc.log").open("w+") as log:
             try:
                 repeater = subprocess.Popen([str(epics / "caRepeater"), "-v"], env=env, stdout=log, stderr=log)
-                ioc = subprocess.Popen([str(epics / "softIocPVA"), "-d", str(db)], env=env, stdin=subprocess.PIPE, stdout=log, stderr=log)
+                ioc = subprocess.Popen([str(epics / "softIocPVA"), "-m", "P=" + prefix,
+                                        "-a", str(access), "-d", str(database), "-d", str(db)],
+                                       env=env, stdin=subprocess.PIPE, stdout=log, stderr=log)
                 time.sleep(0.5)
                 if ioc.poll() is not None:
                     raise RuntimeError("Test IOC exited during startup")
