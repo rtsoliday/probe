@@ -42,6 +42,10 @@ Count limits must be between 1 and 1000000. Invalid arguments exit with status
 2. `--info` returns 1 if any PV is unavailable or its data/metadata times out,
 and 0 on success. GUI discovery continues after the deadline and recovers when
 an IOC returns. PVA requires an EPICS Base built with pvAccess and pvData.
+The `--info` report alone goes to standard output; EPICS library diagnostics go
+to standard error. When scripts capture `--info` output, run a caRepeater
+service or make sure the `caRepeater` on `PATH` is from EPICS 7.0.4 or later:
+an older repeater started on demand keeps the caller's output open.
 
 ## Workspace and appearance
 
