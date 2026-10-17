@@ -361,6 +361,7 @@ Inspector::Inspector(Address address, Options options, QWidget* parent) : QWidge
   connect(input, &QLineEdit::returnPressed, this, [this] { if (put->isEnabled()) requestWrite(input->text()); });
   connect(undo, &QPushButton::clicked, this, [this] { requestUndo(); });
   connect(input, &QLineEdit::textEdited, this, [this] { lastWriteMessage.clear(); refreshWriteControls(); });
+  connect(input, &QLineEdit::textChanged, this, [this] { enteredAsText = channel_->snapshot.longString; });
   connect(enumChoice, QOverload<int>::of(&QComboBox::activated), this, [this](int i) {
     // Stage text that selects this state even when labels read as indices.
     const auto text = enumWriteText(lastChoices, i);
@@ -509,6 +510,15 @@ void Inspector::releaseViews(int sections) {
   if (released) dirty = true;
 }
 void Inspector::requestWrite(const QString& text) {
+  const auto& s = channel_->snapshot;
+  // A byte array reads the editor as text or as a JSON array depending on its
+  // contents; refuse if they switched since the value was entered.
+  if (s.bytes && text == input->text() && enteredAsText != s.longString) {
+    lastWriteMessage = "The PV switched between text and byte values after you entered this; check it and enter the value again."; lastWriteOK = false;
+    logWrite({QDateTime::currentDateTime(), s.provider + "://" + s.name, s.hasValue ? s.editText() : QString(), text, lastWriteMessage, false});
+    if (logged) logged();
+    refreshWriteControls(); return;
+  }
   if (beginWrite(text)) channel_->write(text);
 }
 void Inspector::requestUndo() {

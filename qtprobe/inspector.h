@@ -107,6 +107,8 @@ private:
   QStringList undoValues, pendingBeforeValues;
   QPoint dragStart;
   bool hasUndo = false, pendingLog = false, pendingProcess = false;
+  // Whether a byte array was shown as text when the editor's value was entered.
+  bool enteredAsText = false;
   QString undoUnavailable, pendingUndoProblem;
   bool beginWrite(const QString& shown);
   QScrollArea* scroll;

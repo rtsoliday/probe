@@ -427,6 +427,21 @@ private slots:
     // Undo would restore the value from before the first write, not what the second replaced.
     slow.refresh(); auto* undo = slow.findChild<QPushButton*>("undoWriteButton"); QVERIFY(!undo->isEnabled()); QVERIFY(undo->toolTip().contains("unknown"));
   }
+  void byteArrayModeIsBoundToTheEntry() {
+    for (const auto& provider : providers()) {
+      // JSON entered while a CHAR array held bytes is not sent as text after it switched to text.
+      Channel raw({prefix + "bytes", provider}); raw.start(); QTRY_VERIFY_WITH_TIMEOUT(raw.snapshot.writable && raw.snapshot.hasValue, 10000);
+      QSignalSpy set(&raw, &Channel::writeFinished); raw.writeValues({"0", "1", "2"}); QTRY_COMPARE(set.size(), 1);
+      Options options; options.provider = provider; Inspector bytes(Address::parse(prefix + "bytes", provider), options); bytes.show(); auto* channel = bytes.channel();
+      QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.writable && channel->snapshot.values == QStringList({"0", "1", "2"}), 10000); QVERIFY(!channel->snapshot.longString);
+      auto* input = bytes.findChild<QLineEdit*>("writeValue"); input->setText("[7, 8, 9]");
+      raw.writeValues({"104", "105", "0"}); QTRY_COMPARE(set.size(), 2); QTRY_VERIFY(channel->snapshot.longString);
+      QSignalSpy done(channel, &Channel::writeFinished); bytes.findChild<QPushButton*>("writeButton")->click(); QTest::qWait(300);
+      QCOMPARE(done.size(), 0); QCOMPARE(raw.snapshot.text, QString("hi")); QVERIFY(bytes.findChild<QLabel*>("writeStatus")->text().contains("switched"));
+      // Entered again while the array shows text, the same characters are written as text.
+      input->clear(); input->setText("[7, 8, 9]"); bytes.findChild<QPushButton*>("writeButton")->click(); QTRY_COMPARE(done.size(), 1); QTRY_COMPARE(raw.snapshot.text, QString("[7, 8, 9]"));
+    }
+  }
   void invalidUtf8IsNotRewritten() {
     for (const auto& provider : providers()) {
       // Bytes that are not UTF-8 decode to U+FFFD; writing that text back would change them.

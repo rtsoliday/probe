@@ -177,7 +177,9 @@ as are CA long-string fields such as `rec.DESC$` (names ending in `$`). Text
 is detected when the bytes before the terminating NUL are printable; binary
 buffers keep the numeric view, and **Text** forces decoding. The write box
 accepts plain text for long strings and replaces the whole string; CA writes
-add the terminating NUL and must fit the field.
+and writes to `$` fields add the terminating NUL, and CA writes must fit the
+field. If an array switches between text and byte values after you enter a
+value, Write refuses it until you enter the value again.
 
 A disconnected value is retained as a last observation and shown in gray. A
 connected PV with no read access is also shown in gray. Metadata is in
