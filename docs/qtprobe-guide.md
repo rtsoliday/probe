@@ -257,8 +257,10 @@ control and alarm limits), and optional `DESC` and `RTYP` record fields. Missing
 optional fields do not prevent inspection. PVA displays the server's structured
 metadata, including `display`, `control` and `valueAlarm` when present; up to
 512 flattened fields are shown and array previews contain up to 16 elements.
-Field names and values are searchable. PVA access reporting reflects the
-provider's advertised rights; the server may still reject a write.
+Field names and values are searchable. pvAccess does not report access rights
+to clients, so a writable PVA value always shows write access and an enabled
+write box; the server applies its access security when you write, and a denied
+write is reported on the result line.
 
 ## Structure browser
 
