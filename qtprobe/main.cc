@@ -82,10 +82,17 @@ int main(int argc, char** argv) {
 #ifdef Q_OS_UNIX
     std::fflush(stdout);
     const int reportFd = dup(STDOUT_FILENO);
-    if (reportFd >= 0 && dup2(STDERR_FILENO, STDOUT_FILENO) >= 0) report.open(reportFd, QIODevice::WriteOnly, QFileDevice::AutoCloseHandle);
+    if (reportFd >= 0 && dup2(STDERR_FILENO, STDOUT_FILENO) >= 0) {
+      if (!report.open(reportFd, QIODevice::WriteOnly, QFileDevice::AutoCloseHandle)) {
+        close(reportFd);
+        QTextStream(stderr) << "Cannot open report output: " << report.errorString() << '\n'; return 2;
+      }
+    }
     else if (reportFd >= 0) close(reportFd);
 #endif
-    if (!report.isOpen()) report.open(stdout, QIODevice::WriteOnly);
+    if (!report.isOpen() && !report.open(stdout, QIODevice::WriteOnly)) {
+      QTextStream(stderr) << "Cannot open report output: " << report.errorString() << '\n'; return 2;
+    }
     std::vector<std::unique_ptr<Channel>> channels;
     QTimer deadline, ready;
     bool expired = false;

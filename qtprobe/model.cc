@@ -3,6 +3,7 @@
 #include <QJsonDocument>
 #include <QLocale>
 #include <QRegularExpression>
+#include <QTimeZone>
 #include <cmath>
 #include <stdexcept>
 #include <algorithm>
@@ -21,7 +22,7 @@ Address Address::parse(QString text, QString provider) {
 }
 QString epicsTimestamp(qint64 seconds, int nanoseconds) {
   if (!seconds) return {};
-  return QDateTime::fromSecsSinceEpoch(seconds, Qt::UTC).toString("yyyy-MM-dd'T'HH:mm:ss") +
+  return QDateTime::fromSecsSinceEpoch(seconds, QTimeZone::utc()).toString("yyyy-MM-dd'T'HH:mm:ss") +
       QString(".%1Z").arg(nanoseconds, 9, 10, QLatin1Char('0'));
 }
 QString Snapshot::timestamp() const { return epicsTimestamp(seconds, nanoseconds); }

@@ -816,9 +816,9 @@ Window::Window(Options o) : options(o) {
     else if (chosen == copy) { const auto& s = inspector->channel()->snapshot; QApplication::clipboard()->setText(s.provider + "://" + s.name); }
     else if (chosen == reconnect) inspector->channel()->start();
   });
-  auto* file = menuBar()->addMenu("&File"); file->addAction("&Open PV", this, &Window::focusPvName, QKeySequence::Open);
+  auto* file = menuBar()->addMenu("&File"); file->addAction("&Open PV", this, &Window::focusPvName)->setShortcut(QKeySequence::Open);
   auto* focus = new QAction(this); focus->setShortcut(QKeySequence("Ctrl+L")); addAction(focus); connect(focus, &QAction::triggered, this, &Window::focusPvName);
-  closeAction = file->addAction("Close PV", this, [this] { closePv(stack->currentIndex()); }, QKeySequence::Close); closeAction->setObjectName("closePvAction");
+  closeAction = file->addAction("Close PV", this, [this] { closePv(stack->currentIndex()); }); closeAction->setShortcut(QKeySequence::Close); closeAction->setObjectName("closePvAction");
   file->addSeparator(); file->addAction("Open &session…", this, &Window::openSessionDialog);
   saveSessionAction = file->addAction("Save session…", this, [this] {
     const auto path = QFileDialog::getSaveFileName(this, "Save session", {}, "QtProbe session (*.qtp)");
@@ -835,12 +835,12 @@ Window::Window(Options o) : options(o) {
     if (!path.isEmpty()) try { current()->saveHistory(path); } catch (const std::exception& e) { QMessageBox::warning(this, "Export", e.what()); }
   }); historyAction->setObjectName("historyAction");
   auto* exportMenu = new QMenu(exportButton); exportMenu->addAction(snapshotAction); exportMenu->addAction(historyAction); exportMenu->addSeparator(); exportMenu->addAction(saveSessionAction); exportButton->setMenu(exportMenu);
-  file->addSeparator(); file->addAction("&Quit", this, &QWidget::close, QKeySequence::Quit);
+  file->addSeparator(); file->addAction("&Quit", this, &QWidget::close)->setShortcut(QKeySequence::Quit);
   auto* view = menuBar()->addMenu("&View"); auto* viewModes = new QActionGroup(this);
-  allPvsAction = view->addAction("All PVs", this, [this] { setComparison(true); }, QKeySequence("Ctrl+1")); allPvsAction->setObjectName("allPvsAction"); allPvsAction->setCheckable(true); viewModes->addAction(allPvsAction);
-  inspectorAction = view->addAction("Inspector", this, [this] { setComparison(false); }, QKeySequence("Ctrl+2")); inspectorAction->setObjectName("inspectorAction"); inspectorAction->setCheckable(true); viewModes->addAction(inspectorAction);
-  nextPvAction = view->addAction("Next PV", this, [this] { cyclePv(1); }, QKeySequence("Ctrl+PgDown")); nextPvAction->setObjectName("nextPvAction");
-  previousPvAction = view->addAction("Previous PV", this, [this] { cyclePv(-1); }, QKeySequence("Ctrl+PgUp")); previousPvAction->setObjectName("previousPvAction"); view->addSeparator();
+  allPvsAction = view->addAction("All PVs", this, [this] { setComparison(true); }); allPvsAction->setShortcut(QKeySequence("Ctrl+1")); allPvsAction->setObjectName("allPvsAction"); allPvsAction->setCheckable(true); viewModes->addAction(allPvsAction);
+  inspectorAction = view->addAction("Inspector", this, [this] { setComparison(false); }); inspectorAction->setShortcut(QKeySequence("Ctrl+2")); inspectorAction->setObjectName("inspectorAction"); inspectorAction->setCheckable(true); viewModes->addAction(inspectorAction);
+  nextPvAction = view->addAction("Next PV", this, [this] { cyclePv(1); }); nextPvAction->setShortcut(QKeySequence("Ctrl+PgDown")); nextPvAction->setObjectName("nextPvAction");
+  previousPvAction = view->addAction("Previous PV", this, [this] { cyclePv(-1); }); previousPvAction->setShortcut(QKeySequence("Ctrl+PgUp")); previousPvAction->setObjectName("previousPvAction"); view->addSeparator();
   auto* zoomIn = view->addAction("Zoom in", this, [this] {
     const int steps[] = {70, 80, 90, 100, 110, 125, 150, 175, 200};
     for (int step : steps) if (step > zoom()) { setZoomLevel(step); return; }
@@ -849,8 +849,8 @@ Window::Window(Options o) : options(o) {
   auto* zoomOut = view->addAction("Zoom out", this, [this] {
     const int steps[] = {200, 175, 150, 125, 110, 100, 90, 80, 70};
     for (int step : steps) if (step < zoom()) { setZoomLevel(step); return; }
-  }, QKeySequence::ZoomOut); zoomOut->setObjectName("zoomOutAction");
-  auto* actualSize = view->addAction("Actual size", this, [this] { setZoomLevel(100); }, QKeySequence("Ctrl+0")); actualSize->setObjectName("actualSizeAction");
+  }); zoomOut->setShortcut(QKeySequence::ZoomOut); zoomOut->setObjectName("zoomOutAction");
+  auto* actualSize = view->addAction("Actual size", this, [this] { setZoomLevel(100); }); actualSize->setShortcut(QKeySequence("Ctrl+0")); actualSize->setObjectName("actualSizeAction");
   view->addSeparator();
   auto* appearanceMenu = view->addMenu("Appearance"); auto* appearanceGroup = new QActionGroup(this); appearanceGroup->setExclusive(true);
   const auto savedAppearance = QSettings().value("appearance", "system").toString();
@@ -865,7 +865,7 @@ Window::Window(Options o) : options(o) {
     else if (current()) channels << current()->channel();
     if (channels.isEmpty()) { statusBar()->showMessage("Select PVs in the All table first", 6000); return; }
     openInStripTool(channels);
-  }, QKeySequence("Ctrl+T")); strip->setObjectName("stripToolAction");
+  }); strip->setShortcut(QKeySequence("Ctrl+T")); strip->setObjectName("stripToolAction");
   tools->addSeparator();
   auto* confirmAction = tools->addAction("Confirm before writing"); confirmAction->setObjectName("confirmWritesAction"); confirmAction->setCheckable(true); confirmAction->setChecked(confirmWrites);
   confirmAction->setToolTip("Ask before each write, Undo or Process");
@@ -1053,8 +1053,14 @@ void Window::openInStripTool(const QList<Channel*>& channels) {
   catch (const std::exception& e) { statusBar()->showMessage(QString::fromLocal8Bit(e.what()), 10000); return; }
   // Keep only the newest configurations; each launch writes a new one.
   const auto old = QDir(folder).entryInfoList({"qtprobe-*.stp"}, QDir::Files, QDir::Time);
-  // Never the one just written, whatever other files' times say.
-  for (int i = 20; i < old.size(); ++i) if (old[i].absoluteFilePath() != QFileInfo(path).absoluteFilePath()) QFile::remove(old[i].filePath());
+  // Reserve one of the twenty slots for the file just written, even when
+  // clock skew sorts it after all the older configurations.
+  const auto currentPath = QFileInfo(path).absoluteFilePath(); int retained = 1;
+  for (const auto& entry : old) {
+    if (entry.absoluteFilePath() == currentPath) continue;
+    if (retained < 20) ++retained;
+    else QFile::remove(entry.filePath());
+  }
   if (!QProcess::startDetached(program, {path}, folder)) { statusBar()->showMessage("Could not start " + program, 10000); return; }
   statusBar()->showMessage(QString("Opened %1 PV%2 in QtStripTool%3").arg(snapshots.size()).arg(snapshots.size() == 1 ? "" : "s")
       .arg(skipped ? QString(" · skipped %1 (PVA, over ten, or long names)").arg(skipped) : QString()), 8000);
@@ -1071,7 +1077,7 @@ void Window::showWriteLog() {
     auto* exportLog = buttons->addButton("Export CSV…", QDialogButtonBox::ActionRole); exportLog->setObjectName("exportWriteLog");
     auto* clearLog = buttons->addButton("Clear", QDialogButtonBox::ResetRole); clearLog->setObjectName("clearWriteLog");
     connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
-    connect(exportLog, &QPushButton::clicked, dialog, [this, dialog] {
+    connect(exportLog, &QPushButton::clicked, dialog, [dialog] {
       const auto path = QFileDialog::getSaveFileName(dialog, "Export write log", {}, "CSV (*.csv)");
       if (!path.isEmpty()) try { saveFile(path, writeLogCsv()); } catch (const std::exception& e) { QMessageBox::warning(dialog, "Export", e.what()); }
     });

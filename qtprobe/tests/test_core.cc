@@ -1,6 +1,6 @@
 #include "channel.h"
 #include "record.h"
-#include <QtTest>
+#include "test_compat.h"
 #include <QJsonArray>
 #include <QDateTime>
 #include <cmath>
@@ -12,9 +12,9 @@ private slots:
     QCOMPARE(Address::parse(" Test:PV ").uri(), QString("ca://Test:PV"));
     QCOMPARE(Address::parse("pva://Test:PV", "ca").provider, QString("pva"));
     QCOMPARE(Address::parse("ca://Test:PV", "pva").provider, QString("ca"));
-    QVERIFY_EXCEPTION_THROWN(Address::parse(""), std::runtime_error);
-    QVERIFY_EXCEPTION_THROWN(Address::parse("bad name"), std::runtime_error);
-    QVERIFY_EXCEPTION_THROWN(Address::parse("https://x"), std::runtime_error);
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, Address::parse(""));
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, Address::parse("bad name"));
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, Address::parse("https://x"));
   }
   void exactValuesAndFormats() {
     Snapshot s; s.hasValue = s.numeric = true; s.values << "18446744073709551615";

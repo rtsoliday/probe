@@ -8,12 +8,16 @@
 #include "structure_browser.h"
 #include "model.h"
 #include <QtWidgets>
-#include <QtTest>
+#include "test_compat.h"
 #include <QDesktopServices>
 #include <QTemporaryDir>
 #include <QJsonDocument>
 #include <cmath>
 using namespace probe;
+// These widgets use C++ RTTI rather than declaring their own Q_OBJECT.
+template<class T> T* findWidget(const QObject* parent, const QString& name) {
+  return dynamic_cast<T*>(parent->findChild<QWidget*>(name));
+}
 class UrlCapture : public QObject {
   Q_OBJECT
 public:
@@ -39,6 +43,9 @@ class UiTest : public QObject {
 private slots:
   void initTestCase() {
     QCoreApplication::setOrganizationName("QtProbeTests");
+    // macOS ignores XDG_CACHE_HOME. A unique application name isolates its
+    // native cache too, including concurrent Qt 5 and Qt 6 test runs.
+    QCoreApplication::setApplicationName(QFileInfo(settings.path()).fileName());
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settings.path());
     qputenv("XDG_CACHE_HOME", (settings.path() + "/cache").toUtf8());
@@ -46,6 +53,11 @@ private slots:
     qputenv("EPICS_CA_REPEATER_PORT", "59992");
     qputenv("EPICS_PVA_AUTO_ADDR_LIST", "NO"); qputenv("EPICS_PVA_ADDR_LIST", "127.0.0.1:59993");
     qunsetenv("EPICS_CA_NAME_SERVERS"); qunsetenv("EPICS_PVA_NAME_SERVERS");
+  }
+  void cleanupTestCase() {
+    const auto cache = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    if (QFileInfo(cache).fileName() == QCoreApplication::applicationName() && QDir(cache).exists())
+      QVERIFY(QDir(cache).removeRecursively());
   }
   static Inspector* inspectorAt(Window& window, int index) { return static_cast<Inspector*>(window.inspectors()->widget(index)); }
   static void publishDemo(Inspector* inspector, int pv, int samples = 180) {
@@ -155,7 +167,7 @@ private slots:
     }
     QFile bad(dir.filePath("bad.qtp")); QVERIFY(bad.open(QIODevice::WriteOnly));
     bad.write("{\"version\":1,\"pvs\":[\"ca://Good\",\"bad name\"]}"); bad.close();
-    QVERIFY_EXCEPTION_THROWN(restored.loadSession(bad.fileName()), std::runtime_error);
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, restored.loadSession(bad.fileName()));
     QCOMPARE(restored.inspectors()->count(), 2);
   }
   void workspaceNavigationEmptyStateAndExactReadback() {
@@ -216,10 +228,15 @@ private slots:
     QVERIFY(trend > one); QVERIFY(scroll->verticalScrollBar()->maximum() == 0 || trend == cap);
     window.addPv("ca://DEMO:Fit:Two"); QCOMPARE(inspectorAt(window, 1)->sections(), int(TrendSection));
     QCOMPARE(window.findChild<QStackedWidget*>("workspacePages")->currentIndex(), 2);
-    window.findChild<QTabBar*>("pvTabs")->setCurrentIndex(0); QTest::qWait(50); QCOMPARE(window.height(), trend);
+    window.findChild<QTabBar*>("pvTabs")->setCurrentIndex(0); QTest::qWait(50);
+    auto* tabs = window.findChild<QWidget*>("pvTabStrip");
+    // A second PV adds the tab row, unless the screen height already caps
+    // the window (as on Qt 5's smaller offscreen display).
+    const int tabHeight = tabs->height() + window.centralWidget()->layout()->spacing();
+    QCOMPARE(window.height(), std::min(cap, trend + tabHeight));
+    QVERIFY(scroll->verticalScrollBar()->maximum() == 0 || window.height() == cap);
     inspector->findChild<QToolButton*>("trendToggle")->click(); QTest::qWait(50);
     // Closing the section shrinks back; the PV tab strip now adds its own row.
-    auto* tabs = window.findChild<QWidget*>("pvTabStrip");
     QCOMPARE(inspectorAt(window, 1)->sections(), 0); QCOMPARE(window.height(), one + tabs->height() + window.centralWidget()->layout()->spacing());
     QCOMPARE(scroll->verticalScrollBar()->maximum(), 0);
     // After a manual resize the window only grows to fit.
@@ -239,7 +256,7 @@ private slots:
       s.connected = s.readable = s.hasValue = s.numeric = i != 3; s.hasValue = true; s.type = "DBF_DOUBLE"; s.precision = 1; s.units = "mA";
       s.number = numbers[i]; s.values = QStringList{QString::number(numbers[i])}; s.severity = severities[i]; s.sequence = 1; channel->update(s);
     }
-    auto* comparison = window.findChild<Comparison*>("comparison"); auto* pages = window.findChild<QStackedWidget*>("workspacePages");
+    auto* comparison = findWidget<Comparison>(&window, "comparison"); auto* pages = window.findChild<QStackedWidget*>("workspacePages");
     QCOMPARE(pages->currentIndex(), 2);
     auto rows = window.findChildren<QFrame*>("pvRow");
     QTRY_COMPARE(rows[1]->findChild<QLabel*>("rowValue")->text(), QString("-1.0"));
@@ -291,7 +308,7 @@ private slots:
     window.addPv("ca://M:one"); window.addPv("ca://M:two");
     for (int pv = 0; pv < 2; ++pv) publishDemo(inspectorAt(window, pv), pv, 50);
     auto* tabs = window.findChild<QTabBar*>("pvTabs"); tabs->setCurrentIndex(0); QApplication::processEvents();
-    auto* first = inspectorAt(window, 0); auto* trend = first->findChild<Plot*>("trendPlot"); auto* events = first->findChild<QTableWidget*>("historyValues");
+    auto* first = inspectorAt(window, 0); auto* trend = findWidget<Plot>(first, "trendPlot"); auto* events = first->findChild<QTableWidget*>("historyValues");
     QTRY_COMPARE(events->rowCount(), 50); QCOMPARE(trend->values.size(), 50);
     tabs->setCurrentIndex(1); QApplication::processEvents(); QVERIFY(trend->values.isEmpty()); QCOMPARE(events->rowCount(), 0);
     tabs->setCurrentIndex(0); QTRY_COMPARE(events->rowCount(), 50); QCOMPARE(trend->values.size(), 50);
@@ -306,7 +323,7 @@ private slots:
     Options options; options.connectOnOpen = false; Window window(options); window.show();
     window.addPv("ca://R:source"); auto* inspector = inspectorAt(window, 0);
     QVERIFY(!inspector->findChild<QToolButton*>("recordToggle")->isHidden());
-    auto* explorer = inspector->findChild<RecordExplorer*>("recordExplorer"); QVERIFY(explorer && !explorer->active());
+    auto* explorer = findWidget<RecordExplorer>(inspector, "recordExplorer"); QVERIFY(explorer && !explorer->active());
     explorer->openLink("R:target.VAL");
     QCOMPARE(window.inspectors()->count(), 2); QCOMPARE(window.findChild<QStackedWidget*>("workspacePages")->currentIndex(), 1);
     QCOMPARE(inspectorAt(window, window.inspectors()->currentIndex())->channel()->snapshot.name, QString("R:target.VAL"));
@@ -321,15 +338,15 @@ private slots:
     auto s = mode->channel()->snapshot; s.connected = s.readable = s.hasValue = s.numeric = true; s.type = "DBF_ENUM"; s.choices = QStringList{"Off", "On"};
     for (int i = 0; i < 6; ++i) { s.number = i % 2; s.values = QStringList{QString::number(i % 2)}; s.sequence = i + 1; mode->channel()->update(s); }
     window.findChild<QTabBar*>("pvTabs")->setCurrentIndex(0); mode->refresh();
-    auto* trend = mode->findChild<Plot*>("trendPlot"); QCOMPARE(trend->levels, s.choices);
+    auto* trend = findWidget<Plot>(mode, "trendPlot"); QCOMPARE(trend->levels, s.choices);
     QVERIFY(mode->findChild<QLabel*>("trendStatistics")->text().contains("5 changes"));
     QVERIFY(!mode->findChild<QLabel*>("trendStatistics")->text().contains("Mean"));
     QVERIFY(mode->findChild<QWidget*>("rangeGauge")->isHidden()); QVERIFY(trend->warningLines.isEmpty());
     window.findChild<QToolButton*>("allPvsTab")->click();
-    QTRY_COMPARE(window.findChildren<QFrame*>("pvRow").front()->findChild<Plot*>("rowTrend")->levels, s.choices);
+    QTRY_COMPARE(findWidget<Plot>(window.findChildren<QFrame*>("pvRow").front(), "rowTrend")->levels, s.choices);
     // Ordinary numbers keep a continuous plot and numeric statistics.
     auto* value = inspectorAt(window, 1); publishDemo(value, 0, 10); window.findChild<QTabBar*>("pvTabs")->setCurrentIndex(1); value->refresh();
-    QVERIFY(value->findChild<Plot*>("trendPlot")->levels.isEmpty()); QVERIFY(value->findChild<QLabel*>("trendStatistics")->text().contains("Mean"));
+    QVERIFY(findWidget<Plot>(value, "trendPlot")->levels.isEmpty()); QVERIFY(value->findChild<QLabel*>("trendStatistics")->text().contains("Mean"));
     // A wheel over the unfocused state list does not stage another state.
     s.writable = true; ++s.sequence; mode->channel()->update(s); window.findChild<QTabBar*>("pvTabs")->setCurrentIndex(0); mode->refresh();
     auto* edit = mode->findChild<QLineEdit*>("writeValue"); edit->setText("On"); auto* states = mode->findChild<QComboBox*>("enumChoice");
@@ -340,7 +357,7 @@ private slots:
   }
   void nameEntryOpensExactlyWhatWasTyped() {
     // Recent names that extend the typed text, or differ only in case, are not substituted.
-    Options options; options.connectOnOpen = false; Window window(options); window.show(); QApplication::setActiveWindow(&window);
+    Options options; options.connectOnOpen = false; Window window(options); window.show(); window.activateWindow();
     window.addPvs({"SR:Q10", "Ring:Current"}); while (window.inspectors()->count()) window.closePv(0);
     auto* name = window.findChild<QComboBox*>("pvName");
     for (const QString typed : {"ca://SR:Q1", "ca://ring:current"}) {
@@ -353,9 +370,9 @@ private slots:
     // A middle-press on a tab, then the PV closes (Ctrl+W), then the pointer moves: no drag of a stale tab.
     Options options; options.connectOnOpen = false; Window window(options); window.show(); window.addPvs({"D:one", "D:two"});
     auto* tabs = window.findChild<QTabBar*>("pvTabs"); const auto where = tabs->tabRect(1).center();
-    QMouseEvent press(QEvent::MouseButtonPress, where, Qt::MiddleButton, Qt::MiddleButton, Qt::NoModifier); QApplication::sendEvent(tabs, &press);
+    QMouseEvent press(QEvent::MouseButtonPress, where, tabs->mapToGlobal(where), Qt::MiddleButton, Qt::MiddleButton, Qt::NoModifier); QApplication::sendEvent(tabs, &press);
     window.closePv(1);
-    QMouseEvent move(QEvent::MouseMove, where + QPoint(40, 0), Qt::NoButton, Qt::MiddleButton, Qt::NoModifier); QApplication::sendEvent(tabs, &move);
+    QMouseEvent move(QEvent::MouseMove, where + QPoint(40, 0), tabs->mapToGlobal(where + QPoint(40, 0)), Qt::NoButton, Qt::MiddleButton, Qt::NoModifier); QApplication::sendEvent(tabs, &move);
     QCOMPARE(window.inspectors()->count(), 1);
   }
   void pausedEnumMenuStagesTheShownState() {
@@ -490,7 +507,7 @@ private slots:
     QVERIFY(!scalar->findChild<QToolButton*>("trendToggle")->isHidden()); QVERIFY(!scalar->findChild<QWidget*>("trendSection")->isHidden());
     window.findChild<QToolButton*>("allPvsTab")->click();
     QTRY_VERIFY(!window.findChildren<QFrame*>("pvRow").isEmpty());
-    for (const auto& value : window.findChildren<QFrame*>("pvRow").front()->findChild<Plot*>("rowTrend")->values) QVERIFY(!std::isfinite(value));
+    for (const auto& value : findWidget<Plot>(window.findChildren<QFrame*>("pvRow").front(), "rowTrend")->values) QVERIFY(!std::isfinite(value));
     QSettings().setValue("sections", 0);
   }
   void textWidthsNeverElideUnhintedText() {
@@ -540,7 +557,7 @@ private slots:
     s.displayLow = 0; s.displayHigh = 100; s.alarmLow = 0; s.warningLow = 0; s.warningHigh = 60; s.alarmHigh = 80; s.severity = 1; s.sequence = 1;
     inspector->channel()->update(s); inspector->refresh();
     auto* gauge = inspector->findChild<QWidget*>("rangeGauge"); QVERIFY(gauge->isVisible()); QVERIFY(gauge->toolTip().contains("HIGH 60 · HIHI 80")); QVERIFY(!gauge->toolTip().contains("LOLO"));
-    QCOMPARE(inspector->findChild<Plot*>("trendPlot")->warningLines, QVector<double>{60}); QCOMPARE(inspector->findChild<Plot*>("trendPlot")->alarmLines, QVector<double>{80});
+    QCOMPARE(findWidget<Plot>(inspector, "trendPlot")->warningLines, QVector<double>{60}); QCOMPARE(findWidget<Plot>(inspector, "trendPlot")->alarmLines, QVector<double>{80});
     QVERIFY(inspector->findChild<QToolButton*>("processButton")->isHidden());
     // Without a connection the write fails; the attempt is still logged and Undo stays off.
     inspector->findChild<QLineEdit*>("writeValue")->setText("75"); inspector->requestWrite("75");
@@ -583,14 +600,25 @@ private slots:
     QVERIFY(text.contains("Strip.Curve.0.Name            P:a")); QVERIFY(text.contains("Strip.Curve.1.Name            P:c")); QVERIFY(!text.contains("P:b"));
     // Generated configurations do not accumulate.
     const QString folder = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/striptool";
-    for (int i = 0; i < 24; ++i) { window.openInStripTool({channels[0]}); QTest::qWait(2); }
+    auto launchAndWait = [&] {
+      QFile::remove(record); window.openInStripTool({channels[0]});
+      // The detached helper must consume its config before another launch
+      // can prune it, or before the temporary script directory is removed.
+      return QTest::qWaitFor([&] { return QFileInfo(record).size() > 0; }, 5000);
+    };
+    for (int i = 0; i < 24; ++i) QVERIFY(launchAndWait());
     QVERIFY(QDir(folder).entryList({"qtprobe-*.stp"}, QDir::Files).size() <= 20);
     // Files with later times (clock skew) never displace the configuration just written.
     for (int i = 0; i < 25; ++i) {
       QFile future(folder + QString("/qtprobe-future-%1.stp").arg(i)); QVERIFY(future.open(QIODevice::WriteOnly)); future.write("x"); future.flush();
       QVERIFY(future.setFileTime(QDateTime::currentDateTime().addDays(1), QFileDevice::FileModificationTime));
     }
-    QFile::remove(record); window.openInStripTool({channels[0]}); QTRY_VERIFY(QFile::exists(record));
+    QVERIFY(launchAndWait());
+    QCOMPARE(QDir(folder).entryList({"qtprobe-*.stp"}, QDir::Files).size(), 20);
+    // A subsequent launch must stay bounded with the future-dated files
+    // still present; this used to leave twenty older files plus the new one.
+    QVERIFY(launchAndWait());
+    QCOMPARE(QDir(folder).entryList({"qtprobe-*.stp"}, QDir::Files).size(), 20);
     qunsetenv("QTPROBE_STRIPTOOL");
   }
   void modernWorkspaceVisualsAndAppearance() {
