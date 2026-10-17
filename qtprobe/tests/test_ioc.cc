@@ -9,7 +9,9 @@
 #include <QJsonArray>
 #include <QTcpServer>
 #include <QUdpSocket>
+#include <clocale>
 #include <cmath>
+#include <string>
 #include <vector>
 using namespace probe;
 class IocTest : public QObject {
@@ -233,6 +235,14 @@ private slots:
     process.start(exe, {"--info", "--json", "-w", "0.2", prefix + "does-not-exist"}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitCode(), 1);
     QVERIFY(QJsonDocument::fromJson(process.readAllStandardOutput()).isArray());
     process.start(exe, {"--info", "--max-elements", "0", prefix + "number"}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitCode(), 2);
+    // EPICS parses numbers (CA settings, PVA puts) with C rules in a decimal-comma locale.
+    const std::string numeric = std::setlocale(LC_NUMERIC, nullptr);
+    if (std::setlocale(LC_NUMERIC, "de_DE.UTF-8")) {
+      std::setlocale(LC_NUMERIC, numeric.c_str());
+      auto german = env; german.insert("LC_ALL", "de_DE.UTF-8"); german.insert("EPICS_CA_CONN_TMO", "30.5"); process.setProcessEnvironment(german);
+      process.start(exe, {"--info", "-w", "5", prefix + "number"}); QVERIFY(process.waitForFinished(10000)); QCOMPARE(process.exitCode(), 0);
+      const auto errors = process.readAllStandardError(); QVERIFY2(!errors.contains("real number"), errors.constData());
+    }
   }
   void pvaStructureTree() {
 #if QTPROBE_HAVE_PVA

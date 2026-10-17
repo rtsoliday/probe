@@ -4,6 +4,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QTextStream>
+#include <clocale>
 #include <cmath>
 #include <memory>
 #include <vector>
@@ -18,6 +19,9 @@ int main(int argc, char** argv) {
   std::unique_ptr<QCoreApplication> app;
   if (headless) app = std::make_unique<QCoreApplication>(argc, argv);
   else app = std::make_unique<QApplication>(argc, argv);
+  // Qt adopts the user's locale, but EPICS parses numbers with the C library
+  // (pvData puts, CA environment settings), so keep C numeric conventions.
+  std::setlocale(LC_NUMERIC, "C");
   QCoreApplication::setApplicationName("qtprobe");
   QCoreApplication::setApplicationVersion("0.1.0");
   QCoreApplication::setOrganizationName("EPICS");
