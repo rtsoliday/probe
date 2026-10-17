@@ -602,6 +602,30 @@ private slots:
     inspector.refresh(); QVERIFY(!undo->isEnabled()); QVERIFY(undo->toolTip().contains("type"));
     ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
   }
+  void recordFieldsStayUniqueAcrossTypeChanges() {
+    Channel subject({prefix + "retype", "ca"}); subject.start();
+    QTRY_VERIFY_WITH_TIMEOUT(subject.snapshot.hasValue, 10000);
+    RecordExplorer explorer(&subject, 3); explorer.show(); explorer.setActive(true);
+    QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("RTYP"), QString("longout"), 10000);
+    auto* table = explorer.findChild<QTableWidget*>("recordFields");
+    const int originalRows = table->rowCount();
+    bool unique = true, bounded = true;
+    for (int round = 0; round < 3; ++round) {
+      for (const bool retyped : {true, false}) {
+        ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog();
+        launch(retyped ? QFINDTESTDATA("fixture-retyped.db") : QString());
+        QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("RTYP"), retyped ? QString("ao") : QString("longout"), 20000);
+        QTest::qWait(200);
+        QStringList fields;
+        for (int row = 0; row < table->rowCount(); ++row) {
+          const auto field = table->item(row, 0)->data(Qt::UserRole + 1).toString();
+          if (!field.isEmpty()) { unique &= !fields.contains(field); fields << field; }
+        }
+        bounded &= table->rowCount() <= originalRows + 2;
+      }
+    }
+    QVERIFY(unique); QVERIFY(bounded);
+  }
   void confirmationCannotReinterpretAnEdit() {
     for (const auto& provider : providers()) {
       Options options; options.provider = provider;

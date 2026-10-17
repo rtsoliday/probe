@@ -2,6 +2,7 @@
 #include "appearance.h"
 #include "channel.h"
 #include <QtWidgets>
+#include <algorithm>
 namespace probe {
 namespace {
 QString shownValue(const Snapshot& s) {
@@ -62,6 +63,7 @@ void RecordExplorer::setActive(bool on) {
 }
 void RecordExplorer::addFields(const QVector<RecordField>& fields) {
   for (const auto& spec : fields) {
+    if (std::any_of(rows.begin(), rows.end(), [&](const Row& row) { return row.spec.name == spec.name; })) continue;
     // Links use FIELD$ so long link text is not cut to 40 characters.
     auto channel = std::make_unique<Channel>(Address{record + '.' + spec.name + (spec.link ? "$" : ""), provider}, true, spec.link ? 4096 : 256, 1, timeout);
     channel->lightweight = true;
@@ -84,7 +86,15 @@ void RecordExplorer::refresh() {
     if (row.spec.name == "RTYP") type = shownValue(row.channel->snapshot);
     if (row.spec.name == "SCAN") scan = shownValue(row.channel->snapshot);
   }
-  if (!type.isEmpty() && type != loadedType) { loadedType = type; addFields(typeRecordFields(type)); }
+  if (!type.isEmpty() && type != loadedType) {
+    // A restarted IOC can reuse the name for another record type. Release
+    // old type-specific channels instead of accumulating them on each change.
+    const auto common = commonRecordFields();
+    rows.erase(std::remove_if(rows.begin(), rows.end(), [&](const Row& row) {
+      return std::none_of(common.begin(), common.end(), [&](const RecordField& field) { return field.name == row.spec.name; });
+    }), rows.end());
+    loadedType = type; addFields(typeRecordFields(type));
+  }
   else if (expired && loadedType.isEmpty() && !scan.isEmpty()) { loadedType = "?"; addFields(typeRecordFields({})); }
   // Disconnected fields keep their last values on screen but are not diagnosed.
   QMap<QString, QString> values, display; QVector<const Row*> shown; bool disconnected = !subject->snapshot.connected;
