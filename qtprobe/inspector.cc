@@ -525,7 +525,7 @@ void Inspector::requestProcess() {
 }
 bool Inspector::eventFilter(QObject* object, QEvent* event) {
   // Drag the PV name into QtEDM, QtStripTool or another QtProbe.
-  if (object == heading) {
+  if (object == heading && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseMove)) {
     auto* mouse = static_cast<QMouseEvent*>(event);
     if (event->type() == QEvent::MouseButtonPress && (mouse->button() == Qt::LeftButton || mouse->button() == Qt::MiddleButton)) dragStart = mouse->pos();
     else if (event->type() == QEvent::MouseMove && (mouse->buttons() & (Qt::LeftButton | Qt::MiddleButton)) &&
@@ -963,7 +963,7 @@ void Window::setZoomLevel(int percent) {
 }
 bool Window::eventFilter(QObject* object, QEvent* event) {
   // Middle-drag a PV tab into QtEDM, QtStripTool or another QtProbe.
-  if (object == pvTabs) {
+  if (object == pvTabs && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseMove)) {
     auto* mouse = static_cast<QMouseEvent*>(event);
     if (event->type() == QEvent::MouseButtonPress && mouse->button() == Qt::MiddleButton) { dragTab = pvTabs->tabAt(mouse->pos()); dragStart = mouse->pos(); }
     else if (event->type() == QEvent::MouseMove && (mouse->buttons() & Qt::MiddleButton) && dragTab >= 0 &&
