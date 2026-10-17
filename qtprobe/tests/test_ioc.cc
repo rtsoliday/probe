@@ -152,6 +152,10 @@ private slots:
     QTRY_VERIFY_WITH_TIMEOUT(pvaWave.snapshot.hasValue && pvaWave.snapshot.writable && pvaWave.snapshot.longString, 10000);
     QCOMPARE(pvaWave.snapshot.text, QString("hello world"));
     pvaWave.write("from pva"); QTRY_COMPARE(pvaWave.snapshot.text, QString("from pva")); QTRY_COMPARE(wave.snapshot.text, QString("from pva"));
+    // A shorter PVA write to a "$" field replaces the whole string; no old tail remains.
+    Channel pvaDesc({prefix + "number.DESC$", "pva"}); pvaDesc.start(); QTRY_VERIFY_WITH_TIMEOUT(pvaDesc.snapshot.writable && pvaDesc.snapshot.hasValue, 10000);
+    QSignalSpy pvaDescWrites(&pvaDesc, &Channel::writeFinished); pvaDesc.write("abc"); QTRY_COMPARE(pvaDescWrites.size(), 1); QVERIFY(pvaDescWrites[0][0].toBool());
+    QTRY_COMPARE(desc.snapshot.text, QString("abc")); desc.write("QtProbe local test value"); QTRY_COMPARE(desc.snapshot.text, QString("QtProbe local test value"));
 #endif
   }
   void inspectorWriteUndoAndProcess() {

@@ -276,14 +276,15 @@ QStringList parseWrite(const Snapshot& s, const QString& text, QString* error) {
   error->clear();
   QStringList values;
   if (s.longString) {
-    // Text replaces the whole string; CA fields keep a terminating NUL.
+    // Text replaces the whole string. CA and "$" fields (fixed-size strings,
+    // over either provider) keep a terminating NUL, or the old tail would remain.
     const auto bytes = text.toUtf8();
     const bool ca = s.provider == "ca", signedBytes = s.provider == "pva" && !s.type.contains("ubyte");
     if (ca && s.capacity && quint64(bytes.size()) + 1 > s.capacity) {
       *error = QString("Text exceeds the %1-byte field.").arg(s.capacity - 1); return {};
     }
     for (const char byte : bytes) values << QString::number(signedBytes ? int(byte) : int(quint8(byte)));
-    if (ca || values.isEmpty()) values << "0";
+    if (ca || s.name.endsWith('$') || values.isEmpty()) values << "0";
     return values;
   }
   if (s.array) {

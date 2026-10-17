@@ -52,7 +52,8 @@ private slots:
     QCOMPARE(s.valueText(), QString("[1, 2, 200]")); QCOMPARE(s.valueText("Text"), s.text);
     s.name = "rec.DESC$"; s.values = QStringList{"0", "0"}; s.decodeBytes(); QVERIFY(s.longString); QCOMPARE(s.valueText(), QString());
     s.provider = "pva"; s.type = "byte[]"; s.capacity = 0;
-    QCOMPARE(parseWrite(s, "\u00e9", &error), (QStringList{"-61", "-87"}));
+    QCOMPARE(parseWrite(s, "\u00e9", &error), (QStringList{"-61", "-87", "0"}));
+    s.name = "rec:wave"; QCOMPARE(parseWrite(s, "\u00e9", &error), (QStringList{"-61", "-87"}));
     s.type = "ubyte[]"; QCOMPARE(parseWrite(s, "\u00e9", &error), (QStringList{"195", "169"}));
   }
   void alarmLimitsAndWriteLog() {
