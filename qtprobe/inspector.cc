@@ -229,9 +229,10 @@ void Plot::paintEvent(QPaintEvent*) {
     p.setPen(c.muted); symbolIcon(Symbol::Wave, c.muted).paint(&p, QRect(width() / 2 - 12, height() / 2 - 26, 24, 24));
     p.drawText(QRect(10, height() / 2 + 2, width() - 20, 30), Qt::AlignHCenter | Qt::AlignTop, "Numeric updates will appear here"); return;
   }
-  const bool discrete = !levels.isEmpty();
   // States sit on whole numbers with half a state of margin; every state
-  // stays on the axis even when it has not occurred.
+  // stays on the axis even when it has not occurred. Values outside the state
+  // list (an unknown mbbi state is 65535) or very long lists use the numeric axis.
+  const bool discrete = !levels.isEmpty() && levels.size() <= 64 && lo >= 0 && hi <= levels.size() - 1;
   const double scale = discrete ? 1 : std::max({std::abs(lo), std::abs(hi), 1e-300});
   double low = discrete ? std::min(lo, 0.0) - 0.5 : lo / scale, high = discrete ? std::max(hi, levels.size() - 1.0) + 0.5 : hi / scale;
   if (low == high) { low -= 0.08; high += 0.08; }

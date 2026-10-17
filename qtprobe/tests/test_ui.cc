@@ -368,6 +368,12 @@ private slots:
     emit inspector.findChild<QComboBox*>("enumChoice")->activated(2);  // "Standby" in the menu shown
     QString error; QCOMPARE(parseWrite(inspector.channel()->snapshot, inspector.findChild<QLineEdit*>("writeValue")->text(), &error), QStringList{"0"});
   }
+  void enumTrendOutsideTheStatesStaysFast() {
+    // An unknown mbbi state (65535) used to add one axis row per integer up to it.
+    Plot plot; plot.resize(400, 160); plot.levels = QStringList{"Off", "On", "Standby"}; plot.values = QVector<double>{0, 1, 65535, 2};
+    QElapsedTimer elapsed; elapsed.start(); for (int i = 0; i < 3; ++i) plot.grab();
+    QVERIFY2(elapsed.elapsed() < 250, qPrintable(QString("3 paints took %1 ms").arg(elapsed.elapsed())));
+  }
   void enumMenuBeforeFirstValue() {
     // Enum metadata can arrive before the first value (NaN): the menu selects nothing.
     Options options; options.connectOnOpen = false; Inspector inspector(Address::parse("E:early"), options); inspector.show();
