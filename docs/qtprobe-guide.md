@@ -200,7 +200,11 @@ The write box under the readback accepts native scalar values. **Write** or
 Enter in the box sends the edit. Enum selection and the **Adjust** section's
 slider, dial and step buttons only stage the edit; press Write to send it.
 **Readback** stages the exact current value; it is disabled for truncated
-arrays so an incomplete readback cannot silently replace the full array.
+arrays so an incomplete readback cannot silently replace the full array. It is
+also disabled for a string that fills the 39 bytes a plain string field is
+read with (CA DBR_STRING, or QSRV), because a longer field such as `DESC` or a
+link may have been cut short; open it with `$` (for example `rec.DESC$`) to
+read and write the exact text.
 Numeric range controls initially use the IOC display limits and can be changed
 locally. Changing these limits does not modify the IOC. Controls are disabled
 when disconnected or while a write is pending. The write box and Adjust are

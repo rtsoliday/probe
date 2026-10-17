@@ -621,8 +621,9 @@ void Inspector::refreshWriteControls() {
       !undoUnavailable.isEmpty() ? undoUnavailable : "No write to undo yet");
   processButton->setVisible(!channel_->readOnly() && s.processable);
   processButton->setEnabled(s.connected && !channel_->writePending() && !channel_->writeUncertain());
-  useReadback->setEnabled(writable && s.readable && (!s.array || !s.truncated) && (s.choices.isEmpty() || !s.editText().isEmpty()) && !s.editText().contains(QChar::ReplacementCharacter));
-  useReadback->setToolTip(s.truncated ? "Readback is truncated; use a complete array for replacement writes." : "Copy the exact current readback into the value editor");
+  useReadback->setEnabled(writable && s.readable && !s.truncated && (s.choices.isEmpty() || !s.editText().isEmpty()) && !s.editText().contains(QChar::ReplacementCharacter));
+  useReadback->setToolTip(!s.truncated ? "Copy the exact current readback into the value editor" : s.array ? "Readback is truncated; use a complete array for replacement writes." :
+      "The server's copy fills 39 bytes and may be cut short; open the field with $ (for example rec.DESC$) for the exact text.");
   QString message, tone = "muted";
   if (channel_->readOnly()) message = "Read-only session · writes are disabled.";
   else if (!s.connected || !s.hasValue) message = "Connect to the PV to write a value.";

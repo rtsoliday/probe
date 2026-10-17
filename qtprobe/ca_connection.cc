@@ -124,8 +124,11 @@ class Ca final : public Connection {
     s.alarmMessage = v.status < ALARM_NSTATUS ? epicsAlarmConditionStrings[v.status] : "Unknown";
     const auto values = &v.value;
     for (long i = 0; i < count; ++i) {
-      if constexpr (std::is_array_v<std::remove_reference_t<decltype(v.value)>>)
+      if constexpr (std::is_array_v<std::remove_reference_t<decltype(v.value)>>) {
         s.values << caString(values[i], MAX_STRING_SIZE);
+        // DBR_STRING holds 39 bytes; a value that fills it may be a longer field (DESC, a link) cut short.
+        if (std::find(values[i], values[i] + MAX_STRING_SIZE, '\0') - values[i] >= MAX_STRING_SIZE - 1) s.truncated = true;
+      }
       else if constexpr (std::is_floating_point_v<std::remove_reference_t<decltype(v.value)>>)
         s.values << QString::number(values[i], 'g', std::is_same_v<T, dbr_time_float> ? 9 : 17);
       else s.values << QString::number(values[i]);
@@ -136,6 +139,7 @@ class Ca final : public Connection {
     if (a.status != ECA_NORMAL || !a.dbr) { c->fail(a.status); return; }
     auto& s = c->s;
     s.values.clear(); const long count = std::min<long>(a.count, c->limit);
+    s.count = a.count; s.truncated = a.count > c->limit;
     switch (a.type) {
 #define EXTRACT(TYPE, STRUCT) case TYPE: extract(c, *static_cast<const STRUCT*>(a.dbr), count); break
     EXTRACT(DBR_TIME_STRING, dbr_time_string);
@@ -148,7 +152,6 @@ class Ca final : public Connection {
 #undef EXTRACT
     default: s.error = "Unsupported CA time type"; c->markDirty(); return;
     }
-    s.count = a.count; s.truncated = a.count > c->limit;
     s.hasValue = true; s.error.clear();
     s.number = s.numeric && count ? s.values[0].toDouble() : std::numeric_limits<double>::quiet_NaN();
     ++s.sequence; c->markDirty();

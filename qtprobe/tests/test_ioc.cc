@@ -482,6 +482,20 @@ private slots:
     QSKIP("Built without pvAccess");
 #endif
   }
+  void serverCutStringsAreNotRestored() {
+    for (const auto& provider : providers()) {
+      // rec.DESC (40 characters) arrives cut to 39 bytes: Readback and Undo must not write the cut text back.
+      Options options; options.provider = provider; Inspector desc(Address::parse(prefix + "longdesc.DESC", provider), options); desc.show(); auto* channel = desc.channel();
+      QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.hasValue && channel->snapshot.writable, 10000); desc.refresh();
+      QCOMPARE(channel->snapshot.values.value(0), QString("012345678901234567890123456789012345678")); QVERIFY(channel->snapshot.truncated);
+      QVERIFY(!desc.findChild<QPushButton*>("useReadbackButton")->isEnabled());
+      QSignalSpy done(channel, &Channel::writeFinished); desc.requestWrite("short"); QTRY_COMPARE(done.size(), 1); QVERIFY(done[0][0].toBool());
+      QVERIFY(!desc.findChild<QPushButton*>("undoWriteButton")->isEnabled());
+      // The full text goes back through the long-string field.
+      Channel full({prefix + "longdesc.DESC$", "ca"}); full.start(); QTRY_VERIFY_WITH_TIMEOUT(full.snapshot.writable && full.snapshot.hasValue, 10000);
+      QSignalSpy restored(&full, &Channel::writeFinished); full.write("0123456789012345678901234567890123456789"); QTRY_COMPARE(restored.size(), 1); QVERIFY2(restored[0][0].toBool(), qPrintable(provider + ": " + restored[0][1].toString() + " capacity " + QString::number(full.snapshot.capacity)));
+    }
+  }
   void invalidUtf8IsNotRewritten() {
     for (const auto& provider : providers()) {
       // Bytes that are not UTF-8 decode to U+FFFD; writing that text back would change them.

@@ -160,6 +160,8 @@ Snapshot extract(const pvd::PVStructure& data, int limit) {
     s.type = QString::fromStdString(scalar->getScalar()->getID());
     s.values << scalarText(*scalar); s.count = 1;
     s.numeric = scalar->getScalar()->getScalarType() != pvd::pvString;
+    // QSRV serves string fields through a 39-byte DBR_STRING; a full one may be a longer field cut short.
+    if (!s.numeric && scalar->getAs<std::string>().size() >= 39) s.truncated = true;
     if (s.numeric) s.number = scalar->getAs<double>();
   } else if (auto array = std::dynamic_pointer_cast<const pvd::PVScalarArray>(value)) {
     s.type = QString::fromStdString(array->getScalarArray()->getID());
