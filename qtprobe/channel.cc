@@ -51,11 +51,12 @@ void Channel::requestPoll() {
 }
 void Channel::stop() {
   timer.stop(); deadline.stop(); writeDeadline.stop();
+  const bool searching = bool(connection);
   connection.reset(); previous.reset();
   if (writePending_) completeWrite(false, "Disconnected before write completion; outcome unknown.", true);
   if (snapshot.connected) {
     auto s = snapshot; s.connected = s.readable = s.writable = false; s.error = "Stopped"; update(s);
-  }
+  } else if (searching) { snapshot.error = "Stopped"; emit changed(); }  // no longer "reconnecting automatically"
 }
 void Channel::update(Snapshot s) {
   const bool event = (s.hasValue && s.sequence != snapshot.sequence) || s.connected != snapshot.connected || s.readable != snapshot.readable;

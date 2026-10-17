@@ -510,6 +510,12 @@ private slots:
     Channel hidden({prefix + "hidden", "ca"}, true, 16384, 10, 0.5); hidden.start();
     QTRY_VERIFY_WITH_TIMEOUT(hidden.snapshot.connected, 10000); QTest::qWait(800);
     QVERIFY(!hidden.snapshot.readable); QCOMPARE(hidden.snapshot.error, QString("Read access denied"));
+    // Stop on a PV that never connected says Stopped, not that discovery continues.
+    for (const auto& provider : providers()) {
+      Channel lost({prefix + "absent", provider}, true, 16384, 10, 0.3); lost.start(); QTRY_VERIFY(!lost.snapshot.error.isEmpty());
+      lost.stop(); QCOMPARE(lost.snapshot.error, QString("Stopped"));
+      lost.start(); QVERIFY(lost.snapshot.error.isEmpty());
+    }
   }
   void reconnectAfterIocRestart() {
     std::vector<std::unique_ptr<Channel>> channels;
