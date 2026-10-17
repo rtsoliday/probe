@@ -354,7 +354,7 @@ QString stripToolConfig(const QList<Snapshot>& snapshots) {
     if (curve >= 10 || s.provider != "ca" || s.name.toUtf8().size() > 63) continue;
     field("Name", s.name);
     if (!s.units.isEmpty() && !s.units.contains(QRegularExpression("\\s")) && s.units.toUtf8().size() <= 31) field("Units", s.units);
-    if (s.displayHigh > s.displayLow) { field("Min", QString::number(s.displayLow, 'g', 17)); field("Max", QString::number(s.displayHigh, 'g', 17)); }
+    if (std::isfinite(s.displayLow) && std::isfinite(s.displayHigh) && s.displayHigh > s.displayLow) { field("Min", QString::number(s.displayLow, 'g', 17)); field("Max", QString::number(s.displayHigh, 'g', 17)); }
     if (s.precision >= 0 && s.precision <= 20) field("Precision", QString::number(s.precision));
     ++curve;
   }

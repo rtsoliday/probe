@@ -78,6 +78,8 @@ private slots:
     QVERIFY(text.contains("Strip.Curve.0.Max             250\n")); QVERIFY(text.contains("Strip.Curve.0.Precision       3\n"));
     QVERIFY(!text.contains("Demo:1\n")); QVERIFY(!text.contains("deg C"));
     QVERIFY(text.contains("Strip.Curve.9.Name            Demo:10\n")); QVERIFY(!text.contains("Demo:11"));
+    // Non-finite display limits (a PVA server may send them) are left to QtStripTool's defaults.
+    list[0].displayHigh = std::numeric_limits<double>::infinity(); QVERIFY(!stripToolConfig(list).contains("inf"));
   }
   void lastUpdateTime() {
     Channel c(Address::parse("unused")); QCOMPARE(c.lastUpdateMs, qint64(0));
