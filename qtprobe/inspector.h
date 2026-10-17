@@ -110,7 +110,8 @@ private:
   // Whether a byte array was shown as text when the editor's value was entered.
   bool enteredAsText = false;
   QString undoUnavailable, pendingUndoProblem;
-  bool beginWrite(const QString& shown);
+  // Asks (when confirming, with the values to send) and records the write for the log and Undo.
+  bool beginWrite(const QStringList& sent, const QString& after, bool ask);
   QScrollArea* scroll;
   QWidget *body, *writeArea;
   ElidedLabel *heading, *description, *value, *writeStatus;

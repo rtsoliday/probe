@@ -220,7 +220,8 @@ PROC field, as `caput rec.PROC 1` does. It appears for Channel Access PVs when
 the PROC field is connected and writable, and never in a read-only session.
 
 **Tools → Confirm before writing** asks before each write, Undo and Process,
-showing the new and current values; the setting is remembered. **Tools → Write
+showing the new and current values as they are sent (enum states with their
+labels, arrays with their element counts); the setting is remembered. **Tools → Write
 log** lists every write and Process requested in this session, newest first,
 with the time, PV, value before, value written and the result, including
 failures and refusals. **Export CSV…** saves the log; **Clear** empties it. The

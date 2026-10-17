@@ -349,6 +349,17 @@ private slots:
       window.closePv(0);
     }
   }
+  void confirmationShowsWhatIsSent() {
+    // The question names enum states by label and counts array elements.
+    Options options; options.connectOnOpen = false; Inspector inspector(Address::parse("C:gain"), options); inspector.show();
+    Snapshot s = inspector.channel()->snapshot; s.connected = s.readable = s.writable = s.hasValue = s.numeric = true; s.type = "DBF_ENUM";
+    s.choices = QStringList{"1", "2", "4", "8"}; s.values = QStringList{"0"}; s.number = 0; s.count = 1; s.sequence = 1; inspector.channel()->update(s); inspector.refresh();
+    QString question; inspector.confirm = [&](const QString& q) { question = q; return false; };
+    inspector.requestWrite("2"); QVERIFY2(question.contains("Write state 1 “2” to C:gain") && question.contains("Current value: state 0 “1”"), qPrintable(question));
+    s.type = "DBF_DOUBLE"; s.choices.clear(); s.array = true; s.count = 3; s.values = QStringList{"1", "2", "3"}; ++s.sequence; inspector.channel()->update(s);
+    inspector.requestWrite("[4, 5]"); QVERIFY2(question.contains("Write 2 elements [4, 5]") && question.contains("Current value: 3 elements [1, 2, 3]"), qPrintable(question));
+    question.clear(); inspector.requestWrite("not json"); QVERIFY(question.isEmpty());
+  }
   void structureMenuSurvivesUpdates() {
     // An update while a field's menu is open replaces the tree; the chosen action uses the live rows.
     QSettings().setValue("sections", int(StructureSection));

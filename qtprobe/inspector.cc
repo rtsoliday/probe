@@ -140,6 +140,17 @@ QString connectionText(const Snapshot& s) {
 }
 QString shortType(QString text) { return text.remove("DBF_"); }
 QString preview(const QString& text) { return text.isEmpty() ? QString("(empty)") : text.size() > 120 ? text.left(120) + "…" : text; }
+// What a write sends, for the confirmation: enum states with their labels,
+// text with its byte count and arrays with their element count.
+QString sentText(const Snapshot& s, const QStringList& values, const QString& text) {
+  if (values.isEmpty()) return preview(text);
+  bool ok; const int state = values[0].toInt(&ok);
+  if (!s.choices.isEmpty() && !s.array && values.size() == 1 && ok) return QString("state %1 “%2”").arg(state).arg(s.choices.value(state));
+  if (s.longString) return preview(text) + QString(" (%1 bytes as text)").arg(values.size());
+  if (s.array || values.size() > 1)
+    return QString("%1 element%2 %3").arg(values.size()).arg(values.size() == 1 ? "" : "s").arg(preview("[" + values.mid(0, 8).join(", ") + (values.size() > 8 ? ", …]" : "]")));
+  return preview(values[0]);
+}
 void startNameDrag(QWidget* source, const QString& name) {
   auto* mime = new QMimeData; mime->setText(name);
   QDrag drag(source); drag.setMimeData(mime); drag.exec(Qt::CopyAction);
@@ -519,17 +530,20 @@ void Inspector::requestWrite(const QString& text) {
     if (logged) logged();
     refreshWriteControls(); return;
   }
-  if (beginWrite(text)) channel_->write(text);
+  // Text that cannot be sent is refused (and logged) without asking.
+  QString error; const auto sent = parseWrite(s, text, &error);
+  if (beginWrite(sent, text, error.isEmpty())) channel_->write(text);
 }
 void Inspector::requestUndo() {
   // The saved elements bypass text parsing, which depends on the PV's current
   // contents (enum labels, text in byte arrays).
-  if (hasUndo && beginWrite(undoValue)) channel_->writeValues(undoValues);
+  if (hasUndo && beginWrite(undoValues, undoValue, true)) channel_->writeValues(undoValues);
 }
-bool Inspector::beginWrite(const QString& shown) {
+bool Inspector::beginWrite(const QStringList& sent, const QString& after, bool ask) {
   const auto& s = channel_->snapshot;
-  if (confirm && !confirm(QString("Write %1 to %2?\nCurrent value: %3").arg(preview(shown), s.name, preview(s.hasValue ? s.editText() : QString())))) return false;
-  pendingLog = true; pendingProcess = false; pendingBefore = s.hasValue ? s.editText() : QString(); pendingAfter = shown;
+  const auto current = s.hasValue ? s.editText() : QString();
+  if (ask && confirm && !confirm(QString("Write %1 to %2?\nCurrent value: %3").arg(sentText(s, sent, after), s.name, s.hasValue ? sentText(s, s.values, current) : preview(current)))) return false;
+  pendingLog = true; pendingProcess = false; pendingBefore = current; pendingAfter = after;
   // Undo restores these exact elements; a truncated readback, or text decoded
   // from bytes that were not UTF-8, cannot be restored.
   pendingBeforeValues = s.values;
