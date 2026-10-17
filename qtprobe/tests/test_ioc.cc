@@ -505,6 +505,12 @@ private slots:
       QVERIFY2(elapsed.elapsed() < 3000, qPrintable(QString("reconnect took %1 ms").arg(elapsed.elapsed())));
     }
   }
+  void accessDeniedAndStopMessages() {
+    // A connected CA PV without read access keeps saying so after the read deadline.
+    Channel hidden({prefix + "hidden", "ca"}, true, 16384, 10, 0.5); hidden.start();
+    QTRY_VERIFY_WITH_TIMEOUT(hidden.snapshot.connected, 10000); QTest::qWait(800);
+    QVERIFY(!hidden.snapshot.readable); QCOMPARE(hidden.snapshot.error, QString("Read access denied"));
+  }
   void reconnectAfterIocRestart() {
     std::vector<std::unique_ptr<Channel>> channels;
     for (const auto& provider : providers()) { auto c = std::make_unique<Channel>(Address{prefix + "number", provider}); c->start(); channels.push_back(std::move(c)); }

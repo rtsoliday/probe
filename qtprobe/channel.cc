@@ -15,7 +15,8 @@ Channel::Channel(Address a, bool ro, int maxElements, int historySize, double ti
   deadline.setSingleShot(true);
   connect(&deadline, &QTimer::timeout, this, [this] {
     previous.reset();
-    if (!snapshot.hasValue) {
+    // A specific error (for example read access denied) says more than a timeout.
+    if (!snapshot.hasValue && snapshot.error.isEmpty()) {
       snapshot.error = "Connection/read timeout; discovery continues automatically.";
       emit changed();
     }
