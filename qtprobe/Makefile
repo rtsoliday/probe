@@ -22,7 +22,9 @@ endif
 endif
 ifeq ($(OS),Windows)
 CXX := cl
-CXXFLAGS = /nologo /O2 /W3 /MD /EHsc /permissive- /Zc:lambda /Zc:__cplusplus /Zc:twoPhase- /utf-8 /std:c++17
+CXXFLAGS = /nologo /O2 /W3 /external:anglebrackets /external:W0 /MD /EHsc /permissive- /Zc:lambda /Zc:__cplusplus /utf-8 /std:c++17
+# Older EPICS pvData headers need delayed template lookup only in the PVA unit.
+$(OBJ_DIR)/pva_connection.obj: CXXFLAGS += /Zc:twoPhase-
 CPPFLAGS += -DEPICS_CALL_DLL -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS
 LDFLAGS :=
 define compile
@@ -31,12 +33,19 @@ endef
 define link
 	link /nologo /OUT:$@ $^ $(LIBS) $(1)
 endef
+# Explicit file logging also works when Windows has no attached console.
+define run_test
+	QT_QPA_PLATFORM=offscreen $(1) -o $(OBJ_DIR)/$(2).txt,txt; status=$$?; cat $(OBJ_DIR)/$(2).txt; exit $$status
+endef
 else
 define compile
 	$(CXX) $(CPPFLAGS) $(QT_CFLAGS) $(CXXFLAGS) $(1) -MMD -MP -c $< -o $@
 endef
 define link
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS) $(1)
+endef
+define run_test
+	QT_QPA_PLATFORM=offscreen $(1)
 endef
 endif
 .PHONY: all install check test test-core test-ui test-ioc clean distclean
@@ -49,13 +58,13 @@ $(OBJ_DIR):
 	mkdir -p $@
 $(OBJ_DIR)/%.$(OBJEXT): %.cc $(HEADERS) Makefile ../Makefile.rules | $(OBJ_DIR)
 	$(call compile,)
-$(OBJ_DIR)/moc_channel.cc: channel.h | $(OBJ_DIR)
-	$(MOC) $(QT_CFLAGS) $< -o $@
-$(OBJ_DIR)/moc_channel.$(OBJEXT): $(OBJ_DIR)/moc_channel.cc
+$(OBJ_DIR)/moc_channel.cc: channel.h Makefile ../Makefile.rules | $(OBJ_DIR)
+	$(MOC) $(CPPFLAGS) $(QT_CFLAGS) $< -o $@
+$(OBJ_DIR)/moc_channel.$(OBJEXT): $(OBJ_DIR)/moc_channel.cc Makefile ../Makefile.rules
 	$(call compile,)
 $(OBJ_DIR)/resources.cc: resources/qtprobe.qrc $(wildcard resources/*.svg) ../docs/qtprobe-guide.md | $(OBJ_DIR)
 	$(RCC) $< -o $@
-$(OBJ_DIR)/resources.$(OBJEXT): $(OBJ_DIR)/resources.cc
+$(OBJ_DIR)/resources.$(OBJEXT): $(OBJ_DIR)/resources.cc Makefile ../Makefile.rules
 	$(call compile,)
 $(OBJ_DIR)/qtprobe$(EXEEXT): $(OBJECTS) $(OBJ_DIR)/main.$(OBJEXT)
 	$(call link,)
@@ -63,17 +72,21 @@ install: $(OBJ_DIR)/qtprobe$(EXEEXT)
 	@mkdir -p $(BIN_DIR) $(EPICS_BIN_DIR)
 	cp -f $< $(BIN_DIR)/
 	$(if $(EPICS_BIN_DIR),cp -f $< $(EPICS_BIN_DIR)/)
-$(OBJ_DIR)/test_%.moc: tests/test_%.cc | $(OBJ_DIR)
-	$(MOC) $(QT_CFLAGS) $< -o $@
-$(OBJ_DIR)/test_%.$(OBJEXT): tests/test_%.cc $(OBJ_DIR)/test_%.moc
+$(OBJ_DIR)/test_%.moc: tests/test_%.cc Makefile ../Makefile.rules | $(OBJ_DIR)
+	$(MOC) $(CPPFLAGS) $(QT_CFLAGS) $(QT_TEST_CFLAGS) $< -o $@
+$(OBJ_DIR)/test_%.$(OBJEXT): tests/test_%.cc $(OBJ_DIR)/test_%.moc $(HEADERS) $(wildcard tests/*.h) Makefile ../Makefile.rules
 	$(call compile,$(QT_TEST_CFLAGS) -DEPICS_TEST_BIN='"$(EPICS_BASE)/bin/$(EPICS_HOST_ARCH)"')
 $(OBJ_DIR)/test_%$(EXEEXT): $(OBJ_DIR)/test_%.$(OBJEXT) $(OBJECTS)
 	$(call link,$(QT_TEST_LIBS))
 test: test-core test-ui test-ioc
 test-core: $(OBJ_DIR)/test_core$(EXEEXT)
-	QT_QPA_PLATFORM=offscreen $<
-test-ui: $(OBJ_DIR)/test_ui$(EXEEXT)
-	QT_QPA_PLATFORM=offscreen $<
+	$(call run_test,$<,test-core)
+$(OBJ_DIR)/striptool_recorder.$(OBJEXT): tests/striptool_recorder.cc Makefile ../Makefile.rules | $(OBJ_DIR)
+	$(call compile,)
+$(OBJ_DIR)/striptool_recorder$(EXEEXT): $(OBJ_DIR)/striptool_recorder.$(OBJEXT)
+	$(call link,)
+test-ui: $(OBJ_DIR)/test_ui$(EXEEXT) $(OBJ_DIR)/striptool_recorder$(EXEEXT)
+	$(call run_test,$<,test-ui)
 .PHONY: benchmark-cpu
 $(OBJ_DIR)/benchmark_cpu.$(OBJEXT): tests/benchmark_cpu.cc $(HEADERS) | $(OBJ_DIR)
 	$(call compile,)
@@ -107,7 +120,7 @@ test-motif: $(OBJ_DIR)/test_ui$(EXEEXT) $(OBJ_DIR)/motif_drag_source
 	$(XVFB_RUN) env QT_QPA_PLATFORM=xcb QTPROBE_TEST_MOTIF_SOURCE="$(abspath $(OBJ_DIR)/motif_drag_source)" \
 	 $(OBJ_DIR)/test_ui motifMiddleButtonDrop
 test-ioc: $(OBJ_DIR)/test_ioc$(EXEEXT) $(OBJ_DIR)/qtprobe$(EXEEXT)
-	QT_QPA_PLATFORM=offscreen $<
+	$(call run_test,$<,test-ioc)
 clean:
 	rm -rf O.$(OS)-$(ARCH)-qt5 O.$(OS)-$(ARCH)-qt6
 distclean: clean

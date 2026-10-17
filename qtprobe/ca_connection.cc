@@ -30,7 +30,8 @@ struct Context {
 };
 std::weak_ptr<Context> sharedContext;
 QString caString(const char* p, size_t n) {
-  return QString::fromLocal8Bit(p, int(std::find(p, p + n, '\0') - p));
+  // Match PVA and CHAR waveforms; Windows' local encoding is an ANSI code page.
+  return QString::fromUtf8(p, int(std::find(p, p + n, '\0') - p));
 }
 class Ca final : public Connection {
   Channel& owner;
@@ -239,15 +240,19 @@ public:
     if (!id || ca_state(id) != cs_conn || !ca_write_access(id))
       throw std::runtime_error("CA write access unavailable");
     processing = false;
+    // CA counts use unsigned long, which is 32-bit on 64-bit Windows.
+    if (quint64(values.size()) > std::numeric_limits<unsigned long>::max())
+      throw std::runtime_error("Too many elements for a CA write");
+    const auto count = static_cast<unsigned long>(values.size());
     const auto native = ca_field_type(id);
     if (native == DBF_STRING) {
       std::vector<std::array<char, MAX_STRING_SIZE>> data;
       for (const auto& value : values) {
-        const auto bytes = value.toLocal8Bit();
+        const auto bytes = value.toUtf8();
         if (bytes.size() >= MAX_STRING_SIZE) throw std::runtime_error("CA strings must fit in 39 bytes");
         std::array<char, MAX_STRING_SIZE> item{}; std::memcpy(item.data(), bytes.constData(), bytes.size()); data.push_back(item);
       }
-      check(ca_array_put_callback(DBR_STRING, data.size(), id, data.data(), written, this));
+      check(ca_array_put_callback(DBR_STRING, count, id, data.data(), written, this));
     } else if (native == DBF_DOUBLE || native == DBF_FLOAT) {
       std::vector<double> data; bool beyondExact = false, huge = false;
       for (const auto& value : values) {
@@ -270,8 +275,8 @@ public:
           const auto bytes = (integer.match(trimmed).hasMatch() ? trimmed : std::trunc(number) == number ? QString::number(number, 'f', 0) : QString::number(number, 'g', 17)).toLatin1();
           std::array<char, MAX_STRING_SIZE> item{}; std::memcpy(item.data(), bytes.constData(), size_t(bytes.size())); text.push_back(item);
         }
-        check(ca_array_put_callback(DBR_STRING, text.size(), id, text.data(), written, this));
-      } else check(ca_array_put_callback(DBR_DOUBLE, data.size(), id, data.data(), written, this));
+        check(ca_array_put_callback(DBR_STRING, count, id, text.data(), written, this));
+      } else check(ca_array_put_callback(DBR_DOUBLE, count, id, data.data(), written, this));
     } else {
       std::vector<dbr_long_t> data;
       for (const auto& value : values) {
@@ -281,7 +286,7 @@ public:
         if (!ok || number < lo || number > hi) throw std::runtime_error("Invalid or out-of-range integer value");
         data.push_back(dbr_long_t(number));
       }
-      check(ca_array_put_callback(DBR_LONG, data.size(), id, data.data(), written, this));
+      check(ca_array_put_callback(DBR_LONG, count, id, data.data(), written, this));
     }
     ca_flush_io();
   }

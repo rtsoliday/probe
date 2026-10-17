@@ -68,12 +68,40 @@ On APS Linux, the default uses the installed GCC 11.3 toolchain and a static
 C++ runtime, matching the other Qt ports. Set `CUSTOM_GCC_PATH=` to use the
 system compiler. Clean before changing compilers or dependency paths.
 
-Linux is verified locally. The makefiles include macOS and native MSVC paths;
-those platforms need validation. For Windows use a configured MSVC shell with
-GNU Make and shell utilities, set `OS=Windows`, `ARCH=x86_64`, `QT_DIR`,
-`QT_VERSION`, `EPICS_BASE` and `EPICS_HOST_ARCH=windows-x64`. The legacy program
-requires Unix/X11. Qt runtime deployment uses `windeployqt` or `macdeployqt`
-plus the matching EPICS runtime libraries.
+For native Windows, run these commands from PowerShell or Command Prompt:
+
+```powershell
+.\build-windows.bat build 4
+.\build-windows.bat rebuild 4
+.\build-windows.bat test 4
+```
+
+The launcher initializes the installed Visual Studio x64 C++ tools, checks
+dependencies and configures runtime paths for tests. It uses the installed
+Qt MSVC SDK at `C:\Qt\6.11.2\msvc2022_64`, sibling `..\epics-base` with
+`EPICS_HOST_ARCH=windows-x64`, Strawberry GNU Make and `C:\cygwin64` shell
+utilities. Set `QT_DIR`, `QT_VERSION`, `EPICS_BASE`, `EPICS_HOST_ARCH`,
+`QTPROBE_MAKE_EXE` or `QTPROBE_CYGWIN_ROOT` to override those locations.
+Qt Test and `caRepeater.exe` plus `softIocPVA.exe` (or `softIoc.exe` for CA-only
+builds) are required for tests. `build-windows.bat clean` needs only Make and
+the shell utilities. The Windows build is verified with MSVC and Qt 6.11.2,
+including Channel Access and pvAccess.
+
+The executable is `bin\Windows-x86_64\qtprobe.exe`. To launch it from
+PowerShell with the default dependencies:
+
+```powershell
+$env:PATH = "C:\Qt\6.11.2\msvc2022_64\bin;C:\github\epics-base\bin\windows-x64;$env:PATH"
+.\bin\Windows-x86_64\qtprobe.exe --version
+.\bin\Windows-x86_64\qtprobe.exe My:PV pva://My:PVA
+```
+
+An already-configured MSVC shell can also run GNU Make directly with
+`OS=Windows ARCH=x86_64 QT_DIR=... EPICS_BASE=... EPICS_HOST_ARCH=windows-x64`
+and `SHELL=C:/cygwin64/bin/sh.exe`, with Cygwin utilities after the MSVC tools
+in `PATH`.
+The legacy program requires Unix/X11. Qt runtime deployment uses `windeployqt`
+or `macdeployqt` plus the matching EPICS runtime libraries.
 
 See [the operator guide](docs/qtprobe-guide.md) for features, exact write
 syntax, limits and compatibility, and [the test guide](qtprobe/tests/README.md).

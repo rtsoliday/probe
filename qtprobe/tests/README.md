@@ -2,6 +2,12 @@
 
 Run `make test` at the repository root, or run `make -C qtprobe test-core`,
 `test-ui`, or `test-ioc` separately. Tests build in the selected Qt object tree.
+On Windows, `build-windows.bat test 4` initializes the compiler and runtime
+environment and runs all three suites. Text logs are retained as `test-core.txt`,
+`test-ui.txt` and `test-ioc.txt` in the object directory. The QtStripTool launch
+test builds a native recorder helper, so it needs neither a Unix script nor
+an installed QtStripTool. The two X11 drag interoperability tests are skipped
+by the offscreen suite on Windows, as on other offscreen platforms.
 Qt Test is required. The IOC test also requires EPICS Base's `softIocPVA` (or
 `softIoc` for CA-only builds); it creates its own records and sets explicit
 loopback-only CA/PVA address lists and isolated server ports. It never uses site

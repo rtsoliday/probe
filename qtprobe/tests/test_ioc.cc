@@ -19,6 +19,14 @@ class IocTest : public QObject {
   QProcess ioc, repeater;
   QString prefix, artifacts;
   QTemporaryDir temp;
+  void stopIoc() {
+#ifdef Q_OS_WIN
+    // QProcess::terminate posts WM_CLOSE, which console IOCs do not handle.
+    ioc.kill();
+#else
+    ioc.terminate();
+#endif
+  }
   QStringList providers() const {
     QStringList p{"ca"};
 #if QTPROBE_HAVE_PVA
@@ -108,6 +116,9 @@ private slots:
       QSignalSpy textWrites(&t, &Channel::writeFinished);
       t.write("value, \"quoted\""); QTRY_COMPARE(t.snapshot.values.value(0), QString("value, \"quoted\"")); QTRY_COMPARE(textWrites.size(), 1); QVERIFY(textWrites[0][0].toBool());
       t.write("hello"); QTRY_COMPARE(t.snapshot.values.value(0), QString("hello")); QTRY_COMPARE(textWrites.size(), 2);
+      const auto unicode = QString::fromUtf8(u8"café µA");
+      t.write(unicode); QTRY_COMPARE(t.snapshot.values.value(0), unicode); QTRY_COMPARE(textWrites.size(), 3); QVERIFY(textWrites[2][0].toBool());
+      t.write("hello"); QTRY_COMPARE(t.snapshot.values.value(0), QString("hello")); QTRY_COMPARE(textWrites.size(), 4);
       Channel n({prefix + "integer", provider}); n.start(); QTRY_VERIFY(n.snapshot.hasValue && n.snapshot.writable);
       QCOMPARE(n.snapshot.values[0], QString("2147483647"));
       QSignalSpy invalid(&n, &Channel::writeFinished); n.write("2147483648"); QTRY_COMPARE(invalid.size(), 1); QVERIFY(!invalid[0][0].toBool());
@@ -234,7 +245,7 @@ private slots:
       auto said = [&](const QString& start) { for (const auto& f : explorer.findings()) if (f.text.startsWith(start)) return true; return false; };
       QTRY_VERIFY(!said("Processing is active"));
       // Without the IOC the last values are not diagnosed as current.
-      ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog();
+      stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog();
       QTRY_VERIFY_WITH_TIMEOUT(said("Record fields are disconnected"), 15000); QVERIFY(!said("No processing problems"));
       // Back again (never processed since the restart, so UDF = 1) the diagnosis resumes.
       launch(); QTRY_VERIFY_WITH_TIMEOUT(subject.snapshot.connected && !said("Record fields are disconnected") && said("UDF = 1"), 20000);
@@ -471,7 +482,7 @@ private slots:
     QSignalSpy done(channel, &Channel::writeFinished);
     slow.requestWrite("1"); QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 5000); QVERIFY(done[0][0].toBool());
     slow.requestWrite("2"); QTest::qWait(500); QVERIFY(channel->writePending());
-    ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog();
+    stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog();
     QTRY_COMPARE_WITH_TIMEOUT(done.size(), 2, 15000); QVERIFY(!done[1][0].toBool()); QVERIFY(done[1][1].toString().contains("outcome unknown"));
     QVERIFY(channel->writeUncertain());
     launch(); QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.connected && channel->snapshot.writable, 20000);
@@ -563,7 +574,7 @@ private slots:
     std::vector<std::unique_ptr<Channel>> channels;
     for (const auto& provider : providers()) { auto c = std::make_unique<Channel>(Address{prefix + "number", provider}); c->start(); channels.push_back(std::move(c)); }
     for (const auto& c : channels) QTRY_VERIFY_WITH_TIMEOUT(c->snapshot.hasValue, 10000);
-    ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog();
+    stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog();
     for (const auto& c : channels) QTRY_VERIFY_WITH_TIMEOUT(!c->snapshot.connected, 15000);
     launch();
     for (const auto& c : channels) {
@@ -583,7 +594,7 @@ private slots:
 #if QTPROBE_HAVE_PVA
     Channel pva({prefix + "retype", "pva"}); pva.start(); QTRY_VERIFY_WITH_TIMEOUT(pva.snapshot.hasValue, 10000); QCOMPARE(pva.snapshot.values.value(0), QString("12"));
 #endif
-    ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); QTRY_VERIFY_WITH_TIMEOUT(!c.snapshot.connected, 15000);
+    stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); QTRY_VERIFY_WITH_TIMEOUT(!c.snapshot.connected, 15000);
     launch(QFINDTESTDATA("fixture-retyped.db"));
     QTRY_VERIFY_WITH_TIMEOUT(c.snapshot.connected && c.snapshot.hasValue && c.snapshot.metadataReady && c.snapshot.type == "DBF_DOUBLE", 20000);
     QTRY_COMPARE(c.snapshot.values.value(0), QString("12.75")); QCOMPARE(c.snapshot.valueText(), QString("12.750"));
@@ -591,16 +602,16 @@ private slots:
     // PVA creates its monitor again on every connection, so it follows the new type too.
     QTRY_VERIFY_WITH_TIMEOUT(pva.snapshot.connected && pva.snapshot.type == "double", 20000); QTRY_COMPARE(pva.snapshot.values.value(0), QString("12.75"));
 #endif
-    ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
+    stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
     // An inspector's Undo from before such a change is not offered for the new type.
     Options options; Inspector inspector(Address::parse(prefix + "retype"), options); inspector.show(); auto* channel = inspector.channel();
     QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.hasValue && channel->snapshot.writable && channel->snapshot.type == "DBF_LONG", 10000);
     QSignalSpy done(channel, &Channel::writeFinished); inspector.requestWrite("13"); QTRY_COMPARE(done.size(), 1);
     auto* undo = inspector.findChild<QPushButton*>("undoWriteButton"); QTRY_VERIFY(undo->isEnabled());
-    ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch(QFINDTESTDATA("fixture-retyped.db"));
+    stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch(QFINDTESTDATA("fixture-retyped.db"));
     QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.connected && channel->snapshot.hasValue && channel->snapshot.type == "DBF_DOUBLE", 20000);
     inspector.refresh(); QVERIFY(!undo->isEnabled()); QVERIFY(undo->toolTip().contains("type"));
-    ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
+    stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
   }
   void recordFieldsStayUniqueAcrossTypeChanges() {
     Channel subject({prefix + "retype", "ca"}); subject.start();
@@ -612,7 +623,7 @@ private slots:
     bool unique = true, bounded = true;
     for (int round = 0; round < 3; ++round) {
       for (const bool retyped : {true, false}) {
-        ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog();
+        stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog();
         launch(retyped ? QFINDTESTDATA("fixture-retyped.db") : QString());
         QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("RTYP"), retyped ? QString("ao") : QString("longout"), 20000);
         QTest::qWait(200);
@@ -658,17 +669,17 @@ private slots:
       inspector.requestWrite(array ? "[9]" : "20"); QTRY_COMPARE(done.size(), array ? 2 : 1);
       auto* undo = inspector.findChild<QPushButton*>("undoWriteButton"); QTRY_VERIFY(undo->isEnabled());
       const auto type = channel->snapshot.type;
-      ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch(QFINDTESTDATA("fixture-retyped.db"));
+      stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch(QFINDTESTDATA("fixture-retyped.db"));
       QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.connected && channel->snapshot.hasValue && channel->snapshot.writable && channel->snapshot.array && channel->snapshot.capacity == (array ? 4u : 8u), 20000);
       QCOMPARE(channel->snapshot.type, type); // Native CA type alone cannot guard Undo.
       inspector.refresh(); const bool disabled = !undo->isEnabled();
       inspector.requestUndo(); QTest::qWait(200); const bool refused = done.size() == (array ? 2 : 1);
-      ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
+      stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
       QVERIFY(disabled); QVERIFY(refused);
     }
   }
   void cleanupTestCase() {
-    ioc.terminate(); if (!ioc.waitForFinished(3000)) { ioc.kill(); ioc.waitForFinished(); } saveLog();
+    stopIoc(); if (!ioc.waitForFinished(3000)) { ioc.kill(); ioc.waitForFinished(); } saveLog();
     repeater.terminate(); if (!repeater.waitForFinished(3000)) { repeater.kill(); repeater.waitForFinished(); }
   }
 };

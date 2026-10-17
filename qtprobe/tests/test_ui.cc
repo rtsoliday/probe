@@ -590,10 +590,15 @@ private slots:
     QVERIFY(value->font().pointSizeF() > valueSize * 1.2); QTRY_VERIFY(row->height() > rowHeight);
     window.findChild<QAction*>("actualSizeAction")->trigger(); QCOMPARE(zoom(), 100); QCOMPARE(QApplication::font().pointSizeF(), base); QTRY_COMPARE(row->height(), rowHeight);
     // QtStripTool receives a configuration with the CA PVs only.
-    QTemporaryDir dir; const auto script = dir.filePath("fake-striptool"), record = dir.filePath("args");
-    { QFile file(script); QVERIFY(file.open(QIODevice::WriteOnly)); file.write(QString("#!/bin/sh\ncp \"$1\" '%1'\n").arg(record).toUtf8()); }
-    QFile::setPermissions(script, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
-    qputenv("QTPROBE_STRIPTOOL", script.toUtf8());
+    QTemporaryDir dir; const auto record = dir.filePath("args");
+    const auto recorder = QCoreApplication::applicationDirPath() + "/striptool_recorder"
+#ifdef Q_OS_WIN
+        ".exe"
+#endif
+        ;
+    QVERIFY(QFileInfo(recorder).isExecutable());
+    qputenv("QTPROBE_TEST_STRIPTOOL_OUTPUT", record.toUtf8());
+    qputenv("QTPROBE_STRIPTOOL", recorder.toUtf8());
     QList<Channel*> channels; for (int i = 0; i < 3; ++i) channels << inspectorAt(window, i)->channel();
     window.openInStripTool(channels);
     QTRY_VERIFY(QFile::exists(record)); QFile config(record); QVERIFY(config.open(QIODevice::ReadOnly)); const auto text = QString::fromUtf8(config.readAll());
@@ -603,7 +608,7 @@ private slots:
     auto launchAndWait = [&] {
       QFile::remove(record); window.openInStripTool({channels[0]});
       // The detached helper must consume its config before another launch
-      // can prune it, or before the temporary script directory is removed.
+      // can prune it, or before the temporary output directory is removed.
       return QTest::qWaitFor([&] { return QFileInfo(record).size() > 0; }, 5000);
     };
     for (int i = 0; i < 24; ++i) QVERIFY(launchAndWait());
@@ -619,7 +624,7 @@ private slots:
     // still present; this used to leave twenty older files plus the new one.
     QVERIFY(launchAndWait());
     QCOMPARE(QDir(folder).entryList({"qtprobe-*.stp"}, QDir::Files).size(), 20);
-    qunsetenv("QTPROBE_STRIPTOOL");
+    qunsetenv("QTPROBE_STRIPTOOL"); qunsetenv("QTPROBE_TEST_STRIPTOOL_OUTPUT");
   }
   void modernWorkspaceVisualsAndAppearance() {
     QSettings().setValue("sections", 0);

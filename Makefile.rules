@@ -100,16 +100,16 @@ HAVE_MOTIF := $(if $(and $(MOTIF_INC),$(MOTIF_LIB),$(X11_INC),$(X11_LIB)),1)
 ifeq ($(OS),Windows)
 BIN_DIR := ../bin/Windows-$(ARCH)
 HAVE_MOTIF :=
-HAVE_PVA := $(if $(wildcard $(EPICS_LIB_DIR)/pvAccess.lib),1,0)
+HAVE_PVA := $(if $(and $(wildcard $(EPICS_BASE)/include/pv/pvAccess.h),$(wildcard $(EPICS_LIB_DIR)/pvAccess.lib),$(wildcard $(EPICS_LIB_DIR)/pvData.lib)),1,0)
 CA_LIBS = $(EPICS_LIB_DIR)/ca.lib $(EPICS_LIB_DIR)/Com.lib
 PVA_LIBS = $(EPICS_LIB_DIR)/pvAccess.lib $(EPICS_LIB_DIR)/pvData.lib
 EPICS_SYS_LIBS = ws2_32.lib
 QT_DIR ?= C:/Qt/6.11.2/msvc2022_64
-QT_CFLAGS = -I$(QT_DIR)/include $(addprefix -I$(QT_DIR)/include/Qt,Core Gui Widgets Network)
+QT_CFLAGS = -DQT_NO_DEBUG -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB -DQT_NETWORK_LIB -I$(QT_DIR)/include $(addprefix -I$(QT_DIR)/include/Qt,Core Gui Widgets Network)
 QT_LIBS = $(addprefix $(QT_DIR)/lib/Qt$(QT_VERSION),Widgets.lib Gui.lib Network.lib Core.lib)
-QT_TEST_CFLAGS = -I$(QT_DIR)/include/QtTest
+QT_TEST_CFLAGS = -DQT_TESTLIB_LIB -I$(QT_DIR)/include/QtTest
 QT_TEST_LIBS = $(QT_DIR)/lib/Qt$(QT_VERSION)Test.lib
 MOC = $(QT_DIR)/bin/moc.exe
 RCC = $(QT_DIR)/bin/rcc.exe
-HAVE_QT := 1
+HAVE_QT := $(if $(wildcard $(QT_DIR)/include/QtWidgets/QApplication),1)
 endif

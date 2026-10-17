@@ -12,6 +12,8 @@
 #include <vector>
 #ifdef Q_OS_UNIX
 #include <unistd.h>
+#elif defined(Q_OS_WIN)
+#include <io.h>
 #endif
 using namespace probe;
 int main(int argc, char** argv) {
@@ -56,7 +58,14 @@ int main(int argc, char** argv) {
   parser.addPositionalArgument("PV", "PV names, ca://PV or pva://PV.", "[PV…]");
   // Invalid arguments exit with status 2, as documented; process() would exit 1.
   if (!parser.parse(QCoreApplication::arguments())) { QTextStream(stderr) << QCoreApplication::applicationName() << ": " << parser.errorText() << '\n'; return 2; }
+#ifdef Q_OS_WIN
+  // Qt's automatic help/version handling can open a Windows message box when
+  // no console is attached. These commands promise display-free text output.
+  if (parser.isSet("help") || parser.isSet("help-all")) { QTextStream(stdout) << parser.helpText(); return 0; }
+  if (parser.isSet("version")) { QTextStream(stdout) << QCoreApplication::applicationName() << ' ' << QCoreApplication::applicationVersion() << '\n'; return 0; }
+#else
   parser.process(*app);
+#endif
   Options options; options.provider = parser.value("provider"); options.readOnly = parser.isSet("read-only");
   bool timeoutOK, maxOK, historyOK, memoryOK;
   const int historyMemory = parser.value("history-memory").toInt(&memoryOK);
@@ -89,6 +98,16 @@ int main(int argc, char** argv) {
       }
     }
     else if (reportFd >= 0) close(reportFd);
+#elif defined(Q_OS_WIN)
+    std::fflush(stdout);
+    const int reportFd = _dup(_fileno(stdout));
+    if (reportFd >= 0 && _dup2(_fileno(stderr), _fileno(stdout)) == 0) {
+      if (!report.open(reportFd, QIODevice::WriteOnly, QFileDevice::AutoCloseHandle)) {
+        _close(reportFd);
+        QTextStream(stderr) << "Cannot open report output: " << report.errorString() << '\n'; return 2;
+      }
+    }
+    else if (reportFd >= 0) _close(reportFd);
 #endif
     if (!report.isOpen() && !report.open(stdout, QIODevice::WriteOnly)) {
       QTextStream(stderr) << "Cannot open report output: " << report.errorString() << '\n'; return 2;
