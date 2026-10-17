@@ -225,7 +225,10 @@ failures and refusals. **Export CSV…** saves the log; **Clear** empties it. Th
 log holds the latest 1000 entries, with each value limited to 1000 characters,
 and is not saved between sessions.
 
-Integer writes are range checked and preserve 64-bit precision. Numeric
+Integer writes are range checked and preserve 64-bit precision. Channel Access
+serves 64-bit integer fields as doubles, so CA writes of values beyond 2^53 are
+sent as integer text that the IOC parses exactly or rejects as out of range; a
+CA readback of such a field is rounded, so use `pva://` to read it exactly. Numeric
 adjustments are disabled for 64-bit integers beyond the exact range of double;
 use the native value editor for those values. Hexadecimal
 integers can use `0x`. Floating-point writes must be finite. Enum writes accept

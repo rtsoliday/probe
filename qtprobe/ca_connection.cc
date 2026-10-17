@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstring>
 #include <stdexcept>
+#include <QRegularExpression>
 #include <vector>
 namespace probe {
 namespace {
@@ -236,14 +237,29 @@ public:
       }
       check(ca_array_put_callback(DBR_STRING, data.size(), id, data.data(), written, this));
     } else if (native == DBF_DOUBLE || native == DBF_FLOAT) {
-      std::vector<double> data;
+      std::vector<double> data; bool beyondExact = false, huge = false;
       for (const auto& value : values) {
         bool ok; double number = value.toDouble(&ok);
         if (!ok || !std::isfinite(number) || (native == DBF_FLOAT && std::abs(number) > std::numeric_limits<float>::max()))
           throw std::runtime_error("Invalid or out-of-range floating-point value");
+        beyondExact = beyondExact || (native == DBF_DOUBLE && std::abs(number) >= 9007199254740992.0);
+        huge = huge || std::abs(number) >= 1e38;
         data.push_back(number);
       }
-      check(ca_array_put_callback(DBR_DOUBLE, data.size(), id, data.data(), written, this));
+      if (beyondExact && !huge) {
+        // CA serves 64-bit integer fields as DBF_DOUBLE, which cannot hold every
+        // integer beyond 2^53 and overflows at 2^63. Send integer text instead:
+        // the IOC parses it for the field's own type, exactly or with an overflow
+        // error, and a double field gets the same value as before.
+        static const QRegularExpression integer("^[+-]?[0-9]{1,20}$");
+        std::vector<std::array<char, MAX_STRING_SIZE>> text;
+        for (int i = 0; i < values.size(); ++i) {
+          const auto trimmed = values[i].trimmed(); const double number = data[size_t(i)];
+          const auto bytes = (integer.match(trimmed).hasMatch() ? trimmed : std::trunc(number) == number ? QString::number(number, 'f', 0) : QString::number(number, 'g', 17)).toLatin1();
+          std::array<char, MAX_STRING_SIZE> item{}; std::memcpy(item.data(), bytes.constData(), size_t(bytes.size())); text.push_back(item);
+        }
+        check(ca_array_put_callback(DBR_STRING, text.size(), id, text.data(), written, this));
+      } else check(ca_array_put_callback(DBR_DOUBLE, data.size(), id, data.data(), written, this));
     } else {
       std::vector<dbr_long_t> data;
       for (const auto& value : values) {

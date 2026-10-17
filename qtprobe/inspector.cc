@@ -640,7 +640,8 @@ void Inspector::refresh(bool allSections) {
   trendPlot->warningLines.clear(); trendPlot->alarmLines.clear();
   if (numeric && s.lowLimitsSet()) { trendPlot->warningLines << s.warningLow; trendPlot->alarmLines << s.alarmLow; }
   if (numeric && s.highLimitsSet()) { trendPlot->warningLines << s.warningHigh; trendPlot->alarmLines << s.alarmHigh; }
-  const bool exactAdjust = !((s.type == "long" || s.type == "ulong") && std::abs(s.number) > 9007199254740991.0);
+  // Beyond 2^53 numeric controls would round; CA also serves 64-bit integers as doubles.
+  const bool exactAdjust = !((s.type == "long" || s.type == "ulong" || (s.provider == "ca" && s.floating())) && std::abs(s.number) > 9007199254740991.0);
   numericControls->setEnabled(put->isEnabled() && numeric && exactAdjust);
   numericControls->setToolTip(exactAdjust ? QString() : "Use the exact value editor for 64-bit integers outside the precise range of numeric controls.");
   available = InfoSection | HistorySection | RecordSection | (s.array ? ArraySection : TrendSection) | (s.structure ? StructureSection : 0) |

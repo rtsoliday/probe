@@ -375,6 +375,27 @@ private slots:
       capped.requestUndo(); QTest::qWait(150); QCOMPARE(done.size(), 1); QTRY_COMPARE(full.snapshot.count, quint64(8));
     }
   }
+  void caInt64BeyondDoublePrecision() {
+    // CA serves int64 fields as doubles: large values are parsed by the IOC, never rounded or wrapped.
+    Channel ca({prefix + "int64", "ca"}); ca.start(); QTRY_VERIFY_WITH_TIMEOUT(ca.snapshot.hasValue && ca.snapshot.writable, 10000);
+    QCOMPARE(ca.snapshot.type, QString("DBF_DOUBLE")); QSignalSpy done(&ca, &Channel::writeFinished);
+    ca.write("9223372036854775806"); QTRY_COMPARE(done.size(), 1); QVERIFY(done[0][0].toBool()); QTRY_VERIFY(ca.snapshot.number > 9.2e18);
+#if QTPROBE_HAVE_PVA
+    Channel exact({prefix + "int64", "pva"}); exact.start(); QTRY_VERIFY_WITH_TIMEOUT(exact.snapshot.hasValue, 10000);
+    QTRY_COMPARE(exact.snapshot.values.value(0), QString("9223372036854775806"));
+#endif
+    // The CA readback of that value is 2^63, which no int64 holds: writing it back is refused, not wrapped.
+    QCOMPARE(ca.snapshot.values.value(0), QString("9.2233720368547758e+18"));
+    ca.write(ca.snapshot.editText()); QTRY_COMPARE(done.size(), 2); QVERIFY(!done[1][0].toBool());
+    QTest::qWait(150); QVERIFY(ca.snapshot.number > 9.2e18);
+    ca.write("5"); QTRY_COMPARE(done.size(), 3); QVERIFY(done[2][0].toBool()); QTRY_COMPARE(ca.snapshot.number, 5.0);
+    // A double field still gets the same doubles, large or not.
+    Channel wide({prefix + "wide", "ca"}); wide.start(); QTRY_VERIFY_WITH_TIMEOUT(wide.snapshot.hasValue && wide.snapshot.writable, 10000);
+    QSignalSpy wrote(&wide, &Channel::writeFinished); int n = 0;
+    for (const auto& [text, expected] : std::vector<std::pair<QString, double>>{{"1e20", 1e20}, {"123456789012345678", 123456789012345678.0}, {"9.2233720368547758e+18", 9223372036854775808.0}, {"-0.5", -0.5}}) {
+      wide.write(text); ++n; QTRY_COMPARE(wrote.size(), n); QVERIFY2(wrote.back()[0].toBool(), qPrintable(text)); QTRY_COMPARE(wide.snapshot.number, expected);
+    }
+  }
   void reconnectAfterIocRestart() {
     std::vector<std::unique_ptr<Channel>> channels;
     for (const auto& provider : providers()) { auto c = std::make_unique<Channel>(Address{prefix + "number", provider}); c->start(); channels.push_back(std::move(c)); }
