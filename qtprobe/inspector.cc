@@ -474,8 +474,7 @@ Inspector::Inspector(Address address, Options options, QWidget* parent) : QWidge
       pendingLog = false; const auto& s = channel_->snapshot;
       logWrite({QDateTime::currentDateTime(), s.provider + "://" + s.name, pendingBefore, pendingAfter, message, ok});
       if (ok && !pendingProcess) {
-        undoValue = pendingBefore; undoValues = pendingBeforeValues; hasUndo = pendingUndoable;
-        undoUnavailable = pendingUndoable ? QString() : "Undo unavailable: the readback before your last write was truncated";
+        undoValue = pendingBefore; undoValues = pendingBeforeValues; hasUndo = pendingUndoProblem.isEmpty(); undoUnavailable = pendingUndoProblem;
       } else if (channel_->writeUncertain()) {
         // The PV may hold the new value; an older Undo would not restore what this write replaced.
         hasUndo = false; undoUnavailable = "Undo unavailable: the outcome of your last write is unknown";
@@ -521,8 +520,12 @@ bool Inspector::beginWrite(const QString& shown) {
   const auto& s = channel_->snapshot;
   if (confirm && !confirm(QString("Write %1 to %2?\nCurrent value: %3").arg(preview(shown), s.name, preview(s.hasValue ? s.editText() : QString())))) return false;
   pendingLog = true; pendingProcess = false; pendingBefore = s.hasValue ? s.editText() : QString(); pendingAfter = shown;
-  // Undo restores these exact elements; a truncated readback cannot be restored.
-  pendingBeforeValues = s.values; pendingUndoable = s.hasValue && !s.truncated && !s.values.isEmpty();
+  // Undo restores these exact elements; a truncated readback, or text decoded
+  // from bytes that were not UTF-8, cannot be restored.
+  pendingBeforeValues = s.values;
+  pendingUndoProblem = !s.hasValue || s.values.isEmpty() ? "Undo unavailable: there was no earlier value" :
+      s.truncated ? "Undo unavailable: the readback before your last write was truncated" :
+      s.values.join(QString()).contains(QChar::ReplacementCharacter) ? "Undo unavailable: the earlier value holds bytes that are not UTF-8" : QString();
   return true;
 }
 void Inspector::requestProcess() {
@@ -594,7 +597,7 @@ void Inspector::refreshWriteControls() {
       !undoUnavailable.isEmpty() ? undoUnavailable : "No write to undo yet");
   processButton->setVisible(!channel_->readOnly() && s.processable);
   processButton->setEnabled(s.connected && !channel_->writePending() && !channel_->writeUncertain());
-  useReadback->setEnabled(writable && s.readable && (!s.array || !s.truncated) && (s.choices.isEmpty() || !s.editText().isEmpty()));
+  useReadback->setEnabled(writable && s.readable && (!s.array || !s.truncated) && (s.choices.isEmpty() || !s.editText().isEmpty()) && !s.editText().contains(QChar::ReplacementCharacter));
   useReadback->setToolTip(s.truncated ? "Readback is truncated; use a complete array for replacement writes." : "Copy the exact current readback into the value editor");
   QString message, tone = "muted";
   if (channel_->readOnly()) message = "Read-only session · writes are disabled.";

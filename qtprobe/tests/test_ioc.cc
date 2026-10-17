@@ -427,6 +427,19 @@ private slots:
     // Undo would restore the value from before the first write, not what the second replaced.
     slow.refresh(); auto* undo = slow.findChild<QPushButton*>("undoWriteButton"); QVERIFY(!undo->isEnabled()); QVERIFY(undo->toolTip().contains("unknown"));
   }
+  void invalidUtf8IsNotRewritten() {
+    for (const auto& provider : providers()) {
+      // Bytes that are not UTF-8 decode to U+FFFD; writing that text back would change them.
+      Channel raw({prefix + "latin.VAL$", "ca"}); raw.start(); QTRY_VERIFY_WITH_TIMEOUT(raw.snapshot.writable, 10000);
+      QSignalSpy set(&raw, &Channel::writeFinished); raw.writeValues({"176", "67", "0"}); QTRY_COMPARE(set.size(), 1); QVERIFY(set[0][0].toBool());
+      Options options; options.provider = provider; Inspector latin(Address::parse(prefix + "latin", provider), options); latin.show(); auto* channel = latin.channel();
+      QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.hasValue && channel->snapshot.writable && channel->snapshot.values.value(0).contains(QChar::ReplacementCharacter), 10000);
+      latin.refresh(); QVERIFY(!latin.findChild<QPushButton*>("useReadbackButton")->isEnabled());
+      QSignalSpy done(channel, &Channel::writeFinished); channel->write(channel->snapshot.editText()); QCOMPARE(done.size(), 1); QVERIFY(!done[0][0].toBool());
+      latin.requestWrite("plain"); QTRY_COMPARE(done.size(), 2); QVERIFY(done[1][0].toBool());
+      auto* undo = latin.findChild<QPushButton*>("undoWriteButton"); QVERIFY(!undo->isEnabled()); QVERIFY(undo->toolTip().contains("UTF-8"));
+    }
+  }
   void reconnectAfterIocRestart() {
     std::vector<std::unique_ptr<Channel>> channels;
     for (const auto& provider : providers()) { auto c = std::make_unique<Channel>(Address{prefix + "number", provider}); c->start(); channels.push_back(std::move(c)); }

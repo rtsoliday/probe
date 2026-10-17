@@ -274,6 +274,10 @@ QByteArray History::csv() const {
 }
 QStringList parseWrite(const Snapshot& s, const QString& text, QString* error) {
   error->clear();
+  // U+FFFD stands for bytes that were not UTF-8; writing it would replace them.
+  if (text.contains(QChar::ReplacementCharacter)) {
+    *error = "The text holds bytes that are not UTF-8 (shown as \uFFFD); it cannot be written back exactly."; return {};
+  }
   QStringList values;
   if (s.longString) {
     // Text replaces the whole string. CA and "$" fields (fixed-size strings,
