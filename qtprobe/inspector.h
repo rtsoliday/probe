@@ -17,10 +17,12 @@ class QStackedWidget;
 class QToolButton;
 class QAction;
 class QTimer;
+class QBoxLayout;
 namespace probe {
 class Comparison;
 class RangeGauge;
 class RecordExplorer;
+class StructureBrowser;
 struct Options {
   QString provider = "ca";
   bool readOnly = false;
@@ -60,7 +62,8 @@ private:
   Qt::TextElideMode mode;
 };
 // Optional inspector sections, shown below the readback when toggled.
-enum Section { TrendSection = 1, AdjustSection = 2, InfoSection = 4, ArraySection = 8, HistorySection = 16, RecordSection = 32, AllSections = 63 };
+enum Section { TrendSection = 1, AdjustSection = 2, InfoSection = 4, ArraySection = 8, HistorySection = 16, RecordSection = 32, StructureSection = 64, AllSections = 127 };
+constexpr int sectionCount = 7;
 class Inspector final : public QWidget {
 public:
   Inspector(Address, Options, QWidget* parent = nullptr);
@@ -69,7 +72,7 @@ public:
   void saveSnapshot(const QString&);
   void saveHistory(const QString&);
   // Requested sections; unavailable ones (Array for scalars, Adjust without
-  // numeric write access) stay hidden until the PV supports them.
+  // numeric write access, Structure for CA) stay hidden until the PV supports them.
   int sections() const { return requested; }
   void setSections(int);
   // Height that shows the readback and open sections without scrolling.
@@ -115,9 +118,13 @@ private:
   QDial* dial;
   QDoubleSpinBox *low, *high, *step;
   QToolButton* freeze;
-  QToolButton* toggles[6];
-  QWidget* panels[6];
+  QToolButton* toggles[sectionCount];
+  QWidget* panels[sectionCount];
   RecordExplorer* explorer;
+  // Created the first time a PVA structure is shown, so CA inspectors never pay for it.
+  StructureBrowser* structure = nullptr;
+  QBoxLayout *structureHeader, *structureContent;
+  StructureBrowser* structureBrowser();
   QTimer* render;
   quint64 displayedHistorySerial = 0;
   QStringList lastChoices;

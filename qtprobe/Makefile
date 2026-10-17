@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := all
 include ../Makefile.rules
 OBJ_DIR := O.$(OS)-$(ARCH)-qt$(QT_VERSION)
-SOURCES = model.cc channel.cc ca_connection.cc pva_connection.cc inspector.cc comparison.cc record.cc record_explorer.cc pv_drop.cc motif_pv_drop.cc help.cc about_banner.cc appearance.cc
+SOURCES = model.cc channel.cc ca_connection.cc pva_connection.cc inspector.cc comparison.cc record.cc record_explorer.cc structure_browser.cc pv_drop.cc motif_pv_drop.cc help.cc about_banner.cc appearance.cc
 OBJEXT := $(if $(filter Windows,$(OS)),obj,o)
 EXEEXT := $(if $(filter Windows,$(OS)),.exe)
 OBJECTS = $(addprefix $(OBJ_DIR)/,$(SOURCES:.cc=.$(OBJEXT))) $(OBJ_DIR)/moc_channel.$(OBJEXT) $(OBJ_DIR)/resources.$(OBJEXT)

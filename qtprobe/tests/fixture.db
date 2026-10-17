@@ -8,12 +8,16 @@ record(ao, "$(P)number") {
 }
 record(mbbo, "$(P)enum") {
   field(ZRST, "Off") field(ONST, "On") field(TWST, "Standby") field(VAL, "1")
+  info(Q:group, {"$(P)group": {"+id": "qtprobe:test/Group:1.0", "mode": {"+channel": "VAL", "+trigger": "*"}}})
 }
 record(stringout, "$(P)text") { field(VAL, "hello") }
 record(longout, "$(P)integer") { field(VAL, "2147483647") }
 record(int64out, "$(P)int64") { field(VAL, "9223372036854775806") }
 record(ao, "$(P)protected") { field(VAL, "7") field(ASG, "READONLY") }
-record(waveform, "$(P)array") { field(FTVL, "DOUBLE") field(NELM, "8") }
+record(waveform, "$(P)array") {
+  field(FTVL, "DOUBLE") field(NELM, "8")
+  info(Q:group, {"$(P)group": {"list": {"+channel": "VAL", "+type": "plain", "+trigger": "*"}}})
+}
 record(waveform, "$(P)longText") { field(FTVL, "CHAR") field(NELM, "64") }
 record(calc, "$(P)counter") { field(CALC, "A+1") field(INPA, "$(P)counter NPP") }
 record(calc, "$(P)calcLinked") { field(SCAN, "1 second") field(INPA, "$(P)number CP") field(CALC, "A*2") field(FLNK, "$(P)text") }

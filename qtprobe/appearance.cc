@@ -99,9 +99,10 @@ QString workspaceStyle(const Colors& c) {
     QToolButton#allPvsTab:hover { color: @text; background: @raised; }
     QFrame#pvTabDivider { background: @border; border: 0; margin: 4px 0; }
     QToolButton#allPvsTab:checked { color: @text; background: transparent; border-bottom-color: @accent; }
-    QTableWidget { color: @text; background: @surface; alternate-background-color: @raised; border: 1px solid @border; border-radius: 0; selection-background-color: @selected; selection-color: @text; }
+    QTableWidget, QTreeWidget { color: @text; background: @surface; alternate-background-color: @raised; border: 1px solid @border; border-radius: 0; selection-background-color: @selected; selection-color: @text; }
     QHeaderView::section { color: @muted; background: @raised; border: 0; border-bottom: 1px solid @border; padding: 3px 6px; text-align: left; }
     QTableWidget::item { padding: 1px 6px; border-bottom: 1px solid @border; }
+    QTreeWidget::item { padding: 1px 4px; }
     QSlider::groove:horizontal { height: 4px; background: @border; border-radius: 2px; }
     QSlider::sub-page:horizontal { background: @accent; border-radius: 2px; }
     QSlider::handle:horizontal { background: @surface; border: 2px solid @accent; width: 12px; margin: -6px 0; border-radius: 7px; }

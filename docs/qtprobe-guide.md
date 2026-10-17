@@ -93,9 +93,11 @@ as color.
 Toggle buttons under the write box open sections below the readback: **Trend**
 (recent numeric plot and statistics), **Adjust** (limits, slider, step and
 dial), **Info** (searchable metadata), **Array** (array PVs only), **History**
-(monitor events) and **Record** (processing fields and links; see [Record
-explorer](#record-explorer)). Any combination can be open. The choice applies to
-every open PV and is remembered for later launches. Adjust appears only for
+(monitor events), **Record** (processing fields and links; see [Record
+explorer](#record-explorer)) and **Structure** (PVA PVs only; see [Structure
+browser](#structure-browser)). Any combination can be open. The choice applies to
+every open PV and is remembered for later launches. Trend appears only for
+scalars; arrays and text waveforms use Array instead. Adjust appears only for
 writable numeric scalars. **Reconnect**, **Stop** and **Pause** are the icons at
 the right of the same row.
 
@@ -243,6 +245,39 @@ metadata, including `display`, `control` and `valueAlarm` when present; up to
 Field names and values are searchable. PVA access reporting reflects the
 provider's advertised rights; the server may still reject a write.
 
+## Structure browser
+
+**Structure** shows a PVA PV's whole pvAccess structure as a tree, the way
+`pvget -v` prints it: each field's name, type (`double`, `string[]`, a
+structure ID such as `epics:nt/NTScalar:1.0`) and live value. It is available
+for every PVA PV, including QSRV groups and other PVs whose value is not a
+plain scalar or array; CA PVs do not have it. Nested structures, unions (the
+selected member), structure arrays and union arrays all open as branches.
+Collapsed structures show a one-line summary: an enum's `(index) state`, an
+alarm's severity and message, a time stamp in UTC, or the field's own `value`.
+
+Normative-type metadata (`alarm`, `timeStamp`, `display`, `control`,
+`valueAlarm`) starts collapsed; other structures start open. Expanding and
+collapsing is remembered per field while the PV is open, and updates change
+values in place, so the tree does not jump or close as data arrives. A value
+that changed in the latest update is shown in the accent color; a collapsed
+field shows its name in the accent color when something inside it changed.
+
+The search box matches field paths, types and values. Matching fields are
+shown with their contents and the structures that contain them; clearing the
+search restores your expansion. **Expand** and **Collapse** act on the whole
+tree, and the copy button copies it as indented text. Right-click a field for
+**Copy value** (an array's retained elements in full), **Copy field path**
+(such as `value.position` or `items[2].name`), **Copy row** (path, type and
+value, tab-separated), **Copy field with contents**, and expand or collapse
+all below it. Ctrl+C copies the selected rows.
+
+The tree lists up to 100 elements of each array and up to 4000 fields in all;
+a muted row says how many more were received. Use **Array** for a PV's full
+value. The browser is read-only; writes go to the PV's `value` field through
+the write box. `--info --json` includes the same tree as `structure`, with
+`fields`, `length` and `omitted` keys.
+
 ## Record explorer
 
 **Record** shows the PV's record fields and explains why it may not be
@@ -297,8 +332,8 @@ server's maximum writable array length.
 
 History is local to each open PV, with native value, IOC timestamp, alarm
 severity, and connection transitions. **Trend** plots it with statistics;
-**History** lists the events. Statistics use finite numeric samples
-(first element for numeric arrays) and report population standard deviation.
+**History** lists the events. Statistics use finite numeric scalar samples
+(arrays have none) and report population standard deviation.
 
 Enum PVs (mbbi/mbbo, bi/bo and PVA NTEnum) are plotted as states, not numbers:
 each state holds until the next event, so the trace steps between levels instead
@@ -432,8 +467,8 @@ font options. Numeric display supports Native, Fixed, Scientific, Hex and
 Binary; nonintegral values remain native in integer formats. Dial controls are
 Qt controls rather than the legacy digit wheels. CA character arrays holding
 text and `$` long-string fields are shown and written as text; binary byte
-arrays keep the numeric view. PVA union and
-structure arrays are summarized, not editable. PVA writes do not request
+arrays keep the numeric view. PVA unions and
+structure arrays can be browsed in Structure but are not editable. PVA writes do not request
 record processing beyond the server's normal put behavior.
 
 Linux Qt 5 is the local acceptance baseline. macOS, Windows, Qt 6 and production

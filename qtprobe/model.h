@@ -8,6 +8,7 @@
 #include <cmath>
 #include <deque>
 #include <limits>
+#include <memory>
 #if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
 #error QtProbe requires Qt 5.15 or newer
 #endif
@@ -19,6 +20,27 @@ struct Address {
 };
 // The name other EPICS tools accept: plain for CA, pva:// otherwise.
 inline QString portableName(const QString& provider, const QString& name) { return provider == "ca" ? name : provider + "://" + name; }
+// One field of a pvAccess structure as the Structure browser shows it. The
+// PVA backend builds the tree, bounded in fields and in listed array
+// elements; CA PVs have none.
+struct FieldNode {
+  enum Kind { Scalar, Array, Structure, Union, StructureArray, UnionArray };
+  Kind kind = Scalar;
+  // type is the pvData ID (double, string[], epics:nt/NTScalar:1.0, any…).
+  // value is the scalar text, an array summary, or a summary of a
+  // well-known structure (enum_t, alarm_t, time_t or a scalar "value").
+  QString name, type, value;
+  // Elements received for arrays; members or elements left out by the bounds.
+  quint64 length = 0, omitted = 0;
+  QVector<FieldNode> children;
+  bool container() const { return kind != Scalar; }
+};
+using FieldTree = std::shared_ptr<const FieldNode>;
+// Indented "type name value" lines, like pvget -v, for copying.
+QString structureText(const FieldNode&, int depth = 0);
+QJsonObject structureJson(const FieldNode&);
+// Leaf fields by dotted path (value.index, alarm.severity…), at most limit.
+void flattenStructure(const FieldNode&, QMap<QString, QString>&, int limit = 512);
 struct Snapshot {
   QString name, provider, host, type, structureId, units, description;
   bool connected = false, readable = false, writable = false;
@@ -39,7 +61,10 @@ struct Snapshot {
   double alarmLow = std::numeric_limits<double>::quiet_NaN(), warningLow = alarmLow, warningHigh = alarmLow, alarmHigh = alarmLow;
   QString text;
   QStringList values, choices;
+  // Extra metadata. For PVA, information() adds the structure's leaf fields.
   QMap<QString, QString> fields;
+  // The full pvAccess structure; shared, so copying a snapshot stays cheap.
+  FieldTree structure;
   QString timestamp() const;
   QString severityText() const;
   // Display text. Native rounds floating-point values to the PV precision.

@@ -5,6 +5,7 @@
 #include "pv_drop.h"
 #include "comparison.h"
 #include "record_explorer.h"
+#include "structure_browser.h"
 #include "model.h"
 #include <QtWidgets>
 #include <QtTest>
@@ -60,6 +61,21 @@ private slots:
       inspector->channel()->update(s);
     }
     inspector->refresh();
+  }
+  static FieldTree structureDemo(const QString& value, const QString& seconds) {
+    auto f = [](const QString& name, const QString& type, const QString& text = {}, FieldNode::Kind kind = FieldNode::Scalar) {
+      FieldNode n; n.name = name; n.type = type; n.value = text; n.kind = kind; return n;
+    };
+    FieldNode root = f({}, "epics:nt/NTScalar:1.0", value, FieldNode::Structure);
+    root.children << f("value", "double", value);
+    auto alarm = f("alarm", "alarm_t", "NO_ALARM", FieldNode::Structure); alarm.children << f("severity", "int", "0") << f("message", "string", "NO_ALARM");
+    auto stamp = f("timeStamp", "time_t", seconds, FieldNode::Structure); stamp.children << f("secondsPastEpoch", "long", seconds);
+    auto data = f("data", "structure", {}, FieldNode::Structure);
+    auto wave = f("wave", "double[]", "[1, 2]", FieldNode::Array); wave.length = 150; wave.omitted = 148;
+    wave.children << f("[0]", "double", "1") << f("[1]", "double", "2");
+    data.children << wave << f("label", "string", "BPM3");
+    root.children << alarm << stamp << data;
+    return std::make_shared<FieldNode>(root);
   }
   void inspectorValuesControlsAndExport() {
     QSettings().setValue("sections", 0);
@@ -308,6 +324,77 @@ private slots:
     // Ordinary numbers keep a continuous plot and numeric statistics.
     auto* value = inspectorAt(window, 1); publishDemo(value, 0, 10); window.findChild<QTabBar*>("pvTabs")->setCurrentIndex(1); value->refresh();
     QVERIFY(value->findChild<Plot*>("trendPlot")->levels.isEmpty()); QVERIFY(value->findChild<QLabel*>("trendStatistics")->text().contains("Mean"));
+    QSettings().setValue("sections", 0);
+  }
+  void structureBrowserUpdatesInPlaceFiltersAndCopies() {
+    QSettings().setValue("sections", int(StructureSection));
+    Options options; options.connectOnOpen = false; Window window(options); window.show();
+    window.addPv("pva://S:demo"); window.addPv("ca://S:plain");
+    auto* pva = inspectorAt(window, 0); auto* ca = inspectorAt(window, 1); auto* tabs = window.findChild<QTabBar*>("pvTabs");
+    auto s = pva->channel()->snapshot; s.connected = s.readable = s.hasValue = s.numeric = true;
+    s.type = "double"; s.values = QStringList{"1"}; s.number = 1; s.count = 1; s.structure = structureDemo("1", "100"); s.sequence = 1;
+    pva->channel()->update(s); tabs->setCurrentIndex(0); pva->refresh();
+    QVERIFY(!pva->findChild<QToolButton*>("structureToggle")->isHidden()); QVERIFY(!pva->findChild<QWidget*>("structureSection")->isHidden());
+    auto* tree = pva->findChild<QTreeWidget*>("structureFields"); QCOMPARE(tree->topLevelItemCount(), 4);
+    auto *value = tree->topLevelItem(0), *alarm = tree->topLevelItem(1), *stamp = tree->topLevelItem(2), *data = tree->topLevelItem(3);
+    QCOMPARE(value->text(2), QString("1")); QCOMPARE(alarm->text(2), QString("NO_ALARM"));
+    QVERIFY(pva->findChild<QLabel*>("structureSummary")->text().startsWith("epics:nt/NTScalar:1.0 · "));
+    // NT metadata starts collapsed; other structures start open.
+    QVERIFY(!alarm->isExpanded()); QVERIFY(!stamp->isExpanded()); QVERIFY(data->isExpanded());
+    auto* wave = data->child(0); QCOMPARE(StructureBrowser::path(wave), QString("data.wave")); QCOMPARE(wave->childCount(), 3);
+    QCOMPARE(StructureBrowser::path(wave->child(1)), QString("data.wave[1]")); QVERIFY(wave->child(2)->text(0).contains("148 more elements"));
+    // Updates reuse the rows: expansion survives and changed values are marked.
+    alarm->setExpanded(true); data->setExpanded(false);
+    const auto accent = colors(tree->palette()).accent;
+    s.structure = structureDemo("2", "101"); s.sequence = 2; pva->channel()->update(s); pva->refresh();
+    QCOMPARE(tree->topLevelItem(0), value); QCOMPARE(value->text(2), QString("2"));
+    QCOMPARE(value->foreground(2).color(), accent); QVERIFY(alarm->foreground(2).color() != accent);
+    QVERIFY(alarm->isExpanded()); QVERIFY(!data->isExpanded());
+    QCOMPARE(stamp->foreground(0).color(), accent); // collapsed, with a changed field inside
+    // Redrawing the same data keeps its marks; an update without changes clears them.
+    pva->refresh(); QCOMPARE(value->foreground(2).color(), accent);
+    s.structure = structureDemo("2", "101"); s.sequence = 3; pva->channel()->update(s); pva->refresh();
+    QVERIFY(value->foreground(2).color() != accent); QVERIFY(stamp->foreground(0).color() != accent);
+    // A search shows matches, their contents and ancestors; clearing it restores expansion.
+    auto* filter = pva->findChild<QLineEdit*>("structureFilter"); filter->setText("bpm3");
+    QVERIFY(value->isHidden()); QVERIFY(!data->isHidden()); QVERIFY(data->isExpanded()); QVERIFY(wave->isHidden()); QVERIFY(!data->child(1)->isHidden());
+    filter->setText("alarm"); QVERIFY(!alarm->isHidden()); QVERIFY(!alarm->child(0)->isHidden()); QVERIFY(data->isHidden());
+    filter->clear(); QVERIFY(!value->isHidden()); QVERIFY(!data->isHidden()); QVERIFY(!data->isExpanded()); QVERIFY(alarm->isExpanded());
+    // Rows copy as path, type and exact value; the button copies the whole structure.
+    tree->setFocus(); tree->clearSelection(); value->setSelected(true); QTest::keySequence(tree, QKeySequence::Copy);
+    QCOMPARE(QApplication::clipboard()->text(), QString("value\tdouble\t2"));
+    pva->findChild<QToolButton*>("copyStructure")->click(); QVERIFY(QApplication::clipboard()->text().startsWith("double value 2\n"));
+    QVERIFY(QApplication::clipboard()->text().contains("        … 148 more elements\n"));
+    // CA has no structure. A hidden inspector frees its rows but keeps expansion choices.
+    tabs->setCurrentIndex(1); ca->refresh();
+    QVERIFY(ca->findChild<QToolButton*>("structureToggle")->isHidden()); QVERIFY(ca->findChild<QWidget*>("structureSection")->isHidden());
+    QTRY_COMPARE(tree->topLevelItemCount(), 0);
+    tabs->setCurrentIndex(0); pva->refresh(); QCOMPARE(tree->topLevelItemCount(), 4);
+    QVERIFY(tree->topLevelItem(1)->isExpanded()); QVERIFY(!tree->topLevelItem(3)->isExpanded());
+    QSettings().setValue("sections", 0);
+  }
+  void arraysHaveNoTrend() {
+    // Element 0 over time is not a trend of an array or a text waveform; Array shows them.
+    QSettings().setValue("sections", int(TrendSection | ArraySection));
+    Options options; options.connectOnOpen = false; Window window(options); window.show();
+    window.addPv("ca://A:wave"); window.addPv("ca://A:text"); window.addPv("ca://A:scalar");
+    auto s = inspectorAt(window, 0)->channel()->snapshot; s.connected = s.readable = s.hasValue = s.numeric = s.array = true;
+    s.type = "DBF_DOUBLE"; s.count = s.capacity = 3;
+    for (int i = 0; i < 4; ++i) { s.values = QStringList{QString::number(i), "2", "3"}; s.number = i; s.sequence = i + 1; inspectorAt(window, 0)->channel()->update(s); }
+    s.type = "DBF_CHAR"; s.bytes = true; s.count = s.capacity = 3; s.values = QStringList{"72", "105", "0"}; s.number = 72; s.sequence = 1;
+    inspectorAt(window, 1)->channel()->update(s);
+    for (int pv = 0; pv < 2; ++pv) {
+      auto* inspector = inspectorAt(window, pv); window.findChild<QTabBar*>("pvTabs")->setCurrentIndex(pv); inspector->refresh();
+      QVERIFY(inspector->findChild<QToolButton*>("trendToggle")->isHidden()); QVERIFY(!inspector->findChild<QToolButton*>("arrayToggle")->isHidden());
+      QVERIFY(inspector->findChild<QWidget*>("trendSection")->isHidden()); QCOMPARE(inspector->sections(), int(TrendSection | ArraySection));
+      for (const auto& sample : inspector->channel()->history.samples) QVERIFY(!std::isfinite(sample.number));
+    }
+    // Scalars keep Trend, and the shared choice still applies to them.
+    auto* scalar = inspectorAt(window, 2); publishDemo(scalar, 0, 5); window.findChild<QTabBar*>("pvTabs")->setCurrentIndex(2); scalar->refresh();
+    QVERIFY(!scalar->findChild<QToolButton*>("trendToggle")->isHidden()); QVERIFY(!scalar->findChild<QWidget*>("trendSection")->isHidden());
+    window.findChild<QToolButton*>("allPvsTab")->click();
+    QTRY_VERIFY(!window.findChildren<QFrame*>("pvRow").isEmpty());
+    for (const auto& value : window.findChildren<QFrame*>("pvRow").front()->findChild<Plot*>("rowTrend")->values) QVERIFY(!std::isfinite(value));
     QSettings().setValue("sections", 0);
   }
   void textWidthsNeverElideUnhintedText() {

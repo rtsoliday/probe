@@ -3,6 +3,7 @@
 #include "help.h"
 #include "comparison.h"
 #include "record_explorer.h"
+#include "structure_browser.h"
 #include "pv_drop.h"
 #include "motif_pv_drop.h"
 #include <QtWidgets>
@@ -257,7 +258,8 @@ void Plot::paintEvent(QPaintEvent*) {
       }
   }
   if (area.width() <= 0 || area.height() <= 0) return;
-  auto point = [&](int index) { return QPointF(area.left() + area.width() * index / std::max(1, int(values.size()) - 1), area.bottom() - area.height() * (values[index] / scale - low) / (high - low)); };
+  // A single value sits in the middle of the axis rather than at its start.
+  auto point = [&](int index) { return QPointF(values.size() == 1 ? area.center().x() : area.left() + area.width() * index / (values.size() - 1), area.bottom() - area.height() * (values[index] / scale - low) / (high - low)); };
   const bool dense = values.size() > area.width() * 2;
   QPainterPath path, fill; QPolygonF run; QVector<QPolygonF> traces;
   bool first = true; QPointF start, last;
@@ -298,7 +300,8 @@ void Plot::paintEvent(QPaintEvent*) {
   p.setPen(c.muted);
   const QRectF axis(area.left(), area.bottom() + 4, area.width(), p.fontMetrics().height());
   const QString lastIndex = QString::number(std::max(0, int(values.size()) - 1));
-  p.drawText(axis, Qt::AlignLeft | Qt::AlignTop, "0"); p.drawText(axis, Qt::AlignRight | Qt::AlignTop, lastIndex);
+  // With one value, end labels would suggest a span; the title alone remains.
+  if (values.size() > 1) { p.drawText(axis, Qt::AlignLeft | Qt::AlignTop, "0"); p.drawText(axis, Qt::AlignRight | Qt::AlignTop, lastIndex); }
   const int side = p.fontMetrics().horizontalAdvance(lastIndex) + 12;
   QString axisTitle = timeAxis ? "Monitor events · oldest to newest" : "Element index";
   if (timeAxis && p.fontMetrics().horizontalAdvance(axisTitle) > axis.width() - 2 * side) axisTitle = "Monitor events";
@@ -365,16 +368,17 @@ Inspector::Inspector(Address address, Options options, QWidget* parent) : QWidge
   });
   // Section toggles on the left, channel commands on the right.
   auto* bar = new QHBoxLayout; bar->setSpacing(4);
-  const char* titles[] = {"Trend", "Adjust", "Info", "Array", "History", "Record"};
-  const char* names[] = {"trendToggle", "adjustToggle", "infoToggle", "arrayToggle", "historyToggle", "recordToggle"};
+  const char* titles[] = {"Trend", "Adjust", "Info", "Array", "History", "Record", "Structure"};
+  const char* names[] = {"trendToggle", "adjustToggle", "infoToggle", "arrayToggle", "historyToggle", "recordToggle", "structureToggle"};
   const char* tips[] = {"Plot recent numeric updates", "Limits, slider and step controls that stage a value",
       "Metadata and record fields", "Array values and index plot", "Monitor events with IOC timestamps",
-      "Record processing fields and links, with reasons it may not update"};
-  for (int i = 0; i < 6; ++i) {
+      "Record processing fields and links, with reasons it may not update",
+      "Every field of the pvAccess structure with its type and live value"};
+  for (int i = 0; i < sectionCount; ++i) {
     auto* toggle = new QToolButton; toggle->setText(titles[i]); toggle->setObjectName(names[i]); toggle->setToolTip(tips[i]);
     toggle->setCheckable(true); toggle->setProperty("role", "toggle"); toggle->setCursor(Qt::PointingHandCursor); toggles[i] = toggle; bar->addWidget(toggle);
     connect(toggle, &QToolButton::clicked, this, [this] {
-      int mask = 0; for (int n = 0; n < 6; ++n) if (toggles[n]->isChecked()) mask |= 1 << n;
+      int mask = 0; for (int n = 0; n < sectionCount; ++n) if (toggles[n]->isChecked()) mask |= 1 << n;
       QSettings().setValue("sections", mask);
       if (sectionsRequested) sectionsRequested(mask); else setSections(mask);
     });
@@ -450,6 +454,8 @@ Inspector::Inspector(Address address, Options options, QWidget* parent) : QWidge
   explorer->openLink = [this](const QString& target) {
     if (openLink) openLink(target.contains("://") ? target : channel_->snapshot.provider + "://" + target);
   };
+  auto structurePanel = section(6, "structureSection", "STRUCTURE", 3);
+  structureHeader = structurePanel.header; structureContent = structurePanel.content;
   // Takes spare height only when no stretching section is open.
   layout->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding));
   connect(format, &QComboBox::currentTextChanged, this, [this] { invalidate(); refresh(false); }); connect(filter, &QLineEdit::textChanged, this, [this] { invalidate(); refresh(false); });
@@ -466,6 +472,15 @@ Inspector::Inspector(Address address, Options options, QWidget* parent) : QWidge
   });
   refresh(); if (options.connectOnOpen) QTimer::singleShot(0, channel_, &Channel::start);
 }
+StructureBrowser* Inspector::structureBrowser() {
+  if (!structure) {
+    structure = new StructureBrowser; structureHeader->addWidget(structure->controls(), 1); structureContent->addWidget(structure, 1);
+    // Icons are drawn for a theme; this one may be newer than the controls.
+    for (auto* b : structure->controls()->findChildren<QToolButton*>())
+      if (b->property("symbol").isValid()) b->setIcon(symbolIcon(Symbol(b->property("symbol").toInt()), colors(palette()).muted));
+  }
+  return structure;
+}
 void Inspector::invalidate() { dirty = true; if (!frozen && isVisible() && !window()->isMinimized() && !render->isActive()) render->start(); }
 void Inspector::showEvent(QShowEvent* event) { QWidget::showEvent(event); explorer->setActive(shown & RecordSection); if (dirty) refresh(false); }
 void Inspector::hideEvent(QHideEvent* event) { render->stop(); explorer->setActive(false); releaseViews(AllSections); QWidget::hideEvent(event); }
@@ -477,6 +492,7 @@ void Inspector::releaseViews(int sections) {
   if ((sections & HistorySection) && events->rowCount()) { events->setRowCount(0); displayedHistorySerial = 0; released = true; }
   if ((sections & ArraySection) && array->rowCount()) { array->setRowCount(0); QVector<double>().swap(waveform->values); released = true; }
   if ((sections & InfoSection) && info->rowCount()) { info->setRowCount(0); released = true; }
+  if ((sections & StructureSection) && structure && !structure->empty()) { structure->release(); released = true; }
   if (released) dirty = true;
 }
 void Inspector::requestWrite(const QString& text) {
@@ -515,7 +531,7 @@ void Inspector::setSections(int mask) {
 }
 void Inspector::applySections() {
   shown = requested & available;
-  for (int i = 0; i < 6; ++i) {
+  for (int i = 0; i < sectionCount; ++i) {
     const int bit = 1 << i;
     toggles[i]->setVisible(available & bit);
     if (toggles[i]->isChecked() != bool(requested & bit)) { QSignalBlocker block(toggles[i]); toggles[i]->setChecked(requested & bit); }
@@ -527,8 +543,8 @@ void Inspector::applySections() {
   checkLayout();
 }
 void Inspector::checkLayout() {
-  const int now = shown | (writeArea->isVisibleTo(body) ? 1 << 5 : 0) | (description->isVisibleTo(body) ? 1 << 6 : 0) |
-      (dial->isVisibleTo(body) ? 1 << 7 : 0) | (gauge->isVisibleTo(body) ? 1 << 8 : 0);
+  const int now = shown | (writeArea->isVisibleTo(body) ? 1 << sectionCount : 0) | (description->isVisibleTo(body) ? 2 << sectionCount : 0) |
+      (dial->isVisibleTo(body) ? 4 << sectionCount : 0) | (gauge->isVisibleTo(body) ? 8 << sectionCount : 0);
   if (now == signature) return;
   signature = now; updateGeometry(); if (layoutChanged) layoutChanged();
 }
@@ -605,7 +621,7 @@ void Inspector::refresh(bool allSections) {
   const bool exactAdjust = !((s.type == "long" || s.type == "ulong") && std::abs(s.number) > 9007199254740991.0);
   numericControls->setEnabled(put->isEnabled() && numeric && exactAdjust);
   numericControls->setToolTip(exactAdjust ? QString() : "Use the exact value editor for 64-bit integers outside the precise range of numeric controls.");
-  available = TrendSection | InfoSection | HistorySection | RecordSection | (s.array ? ArraySection : 0) |
+  available = InfoSection | HistorySection | RecordSection | (s.array ? ArraySection : TrendSection) | (s.structure ? StructureSection : 0) |
       (!channel_->readOnly() && writableSeen && numeric ? AdjustSection : 0);
   applySections();
   if (automaticLimits && s.displayHigh > s.displayLow) { low->setValue(s.displayLow); high->setValue(s.displayHigh); }
@@ -620,6 +636,7 @@ void Inspector::refresh(bool allSections) {
       info->setRowHidden(row, !filter->text().isEmpty() && !(it.key() + ' ' + it.value()).contains(filter->text(), Qt::CaseInsensitive));
     }
   }
+  if ((allSections || shown & StructureSection) && (structure || s.structure)) structureBrowser()->setTree(s.structure);
   if (allSections || shown & ArraySection) {
     const int count = s.array ? std::min(int(s.values.size()), 2048) : 0; array->setRowCount(count); waveform->values.clear();
     for (int i = 0; i < count; ++i) {

@@ -44,18 +44,92 @@ void arrayText(const pvd::PVScalarArray& array, QStringList& out, int limit) {
 #undef ARRAY
   }
 }
-void flatten(const pvd::PVField::shared_pointer& field, const QString& path, QMap<QString, QString>& out) {
-  if (out.size() >= 512) return;
-  if (auto scalar = std::dynamic_pointer_cast<pvd::PVScalar>(field)) out[path] = scalarText(*scalar);
-  else if (auto array = std::dynamic_pointer_cast<pvd::PVScalarArray>(field)) {
-    QStringList values; arrayText(*array, values, 16);
-    out[path] = '[' + values.join(", ") + (array->getLength() > 16 ? ", …]" : "]");
-  } else if (auto structure = std::dynamic_pointer_cast<pvd::PVStructure>(field)) {
-    const auto& names = structure->getStructure()->getFieldNames();
-    const auto& fields = structure->getPVFields();
-    for (size_t i = 0; i < names.size(); ++i)
-      flatten(fields[i], path.isEmpty() ? QString::fromStdString(names[i]) : path + '.' + QString::fromStdString(names[i]), out);
-  } else out[path] = QString::fromStdString(field->getField()->getID()) + " (inspection only)";
+// Structure browser bounds: fields in one tree and elements listed per array.
+constexpr int treeFields = 4000, treeElements = 100;
+const FieldNode* member(const FieldNode& node, const char* name) {
+  for (const auto& child : node.children) if (child.name == QLatin1String(name)) return &child;
+  return nullptr;
+}
+// One-line summaries let collapsed metadata read at a glance.
+QString summary(const FieldNode& node) {
+  if (node.type == "enum_t") {
+    const auto* index = member(node, "index"); const auto* choices = member(node, "choices");
+    if (!index) return {};
+    bool ok; const int i = index->value.toInt(&ok);
+    return choices && ok && i >= 0 && i < choices->children.size() ? QString("(%1) %2").arg(i).arg(choices->children[i].value) : '(' + index->value + ')';
+  }
+  // Alarm and time structures are recognized by their members: servers do not
+  // all give them the alarm_t and time_t IDs.
+  if (const auto* severity = member(node, "severity"); severity && member(node, "status")) {
+    const auto* message = member(node, "message");
+    const QStringList names{"NO_ALARM", "MINOR", "MAJOR", "INVALID", "UNDEFINED"};
+    const QString level = names.value(severity->value.toInt(), severity->value);
+    return message && !message->value.isEmpty() && message->value != level ? level + " · " + message->value : level;
+  }
+  if (const auto* seconds = member(node, "secondsPastEpoch")) {
+    const auto* nanoseconds = member(node, "nanoseconds");
+    return epicsTimestamp(seconds->value.toLongLong(), nanoseconds ? nanoseconds->value.toInt() : 0);
+  }
+  if (const auto* value = member(node, "value")) return value->value;
+  return {};
+}
+FieldNode tree(const pvd::PVField* field, const QString& name, int& budget) {
+  FieldNode n; n.name = name; --budget;
+  if (!field) { n.type = "(null)"; return n; }
+  n.type = QString::fromStdString(field->getField()->getID());
+  // Adds children until the field budget runs out; the rest are counted.
+  auto add = [&](size_t total, const std::function<FieldNode(size_t)>& make) {
+    for (size_t i = 0; i < total; ++i) {
+      if (budget <= 0) { n.omitted = total - i; return; }
+      n.children.append(make(i));
+    }
+  };
+  switch (field->getField()->getType()) {
+  case pvd::scalar: n.value = scalarText(static_cast<const pvd::PVScalar&>(*field)); break;
+  case pvd::scalarArray: {
+    const auto& array = static_cast<const pvd::PVScalarArray&>(*field);
+    n.kind = FieldNode::Array; n.length = array.getLength();
+    QStringList values; arrayText(array, values, int(std::min<size_t>(n.length, treeElements)));
+    n.value = '[' + QStringList(values.mid(0, 16)).join(", ") + (n.length > 16 ? ", …]" : "]");
+    const auto element = QString::fromLatin1(pvd::ScalarTypeFunc::name(array.getScalarArray()->getElementType()));
+    add(size_t(values.size()), [&](size_t i) { --budget; FieldNode e; e.name = QString("[%1]").arg(i); e.type = element; e.value = values[int(i)]; return e; });
+    n.omitted = n.length - quint64(n.children.size());
+    break;
+  }
+  case pvd::structure: {
+    const auto& structure = static_cast<const pvd::PVStructure&>(*field);
+    n.kind = FieldNode::Structure;
+    const auto& names = structure.getStructure()->getFieldNames(); const auto& fields = structure.getPVFields();
+    add(names.size(), [&](size_t i) { return tree(fields[i].get(), QString::fromStdString(names[i]), budget); });
+    n.value = summary(n);
+    break;
+  }
+  case pvd::union_: {
+    const auto& u = static_cast<const pvd::PVUnion&>(*field);
+    n.kind = FieldNode::Union;
+    if (auto selected = u.get()) {
+      const auto member = u.getUnion()->isVariant() ? QString("(any)") : QString::fromStdString(u.getSelectedFieldName());
+      add(1, [&](size_t) { return tree(selected.get(), member, budget); });
+    } else n.value = "(empty)";
+    break;
+  }
+  case pvd::structureArray: {
+    const auto elements = static_cast<const pvd::PVStructureArray&>(*field).view();
+    n.kind = FieldNode::StructureArray; n.length = elements.size();
+    add(std::min<size_t>(elements.size(), treeElements), [&](size_t i) { return tree(elements[i].get(), QString("[%1]").arg(i), budget); });
+    n.omitted = n.length - quint64(n.children.size());
+    break;
+  }
+  case pvd::unionArray: {
+    const auto elements = static_cast<const pvd::PVUnionArray&>(*field).view();
+    n.kind = FieldNode::UnionArray; n.length = elements.size();
+    add(std::min<size_t>(elements.size(), treeElements), [&](size_t i) { return tree(elements[i].get(), QString("[%1]").arg(i), budget); });
+    n.omitted = n.length - quint64(n.children.size());
+    break;
+  }
+  }
+  if ((n.kind == FieldNode::StructureArray || n.kind == FieldNode::UnionArray) && n.length) n.value = QString("%1 elements").arg(n.length);
+  return n;
 }
 double number(const pvd::PVStructure& data, const char* path, double fallback = 0) {
   auto v = data.getSubField<pvd::PVScalar>(path); return v ? v->getAs<double>() : fallback;
@@ -78,9 +152,9 @@ Snapshot extract(const pvd::PVStructure& data, int limit) {
   const double none = std::numeric_limits<double>::quiet_NaN();
   s.alarmLow = number(data, "valueAlarm.lowAlarmLimit", none); s.warningLow = number(data, "valueAlarm.lowWarningLimit", none);
   s.warningHigh = number(data, "valueAlarm.highWarningLimit", none); s.alarmHigh = number(data, "valueAlarm.highAlarmLimit", none);
-  const auto& names = data.getStructure()->getFieldNames();
-  const auto& fields = data.getPVFields();
-  for (size_t i = 0; i < names.size(); ++i) flatten(fields[i], QString::fromStdString(names[i]), s.fields);
+  int budget = treeFields;
+  auto root = std::make_shared<FieldNode>(tree(&data, {}, budget));
+  s.structure = std::move(root);
   auto value = data.getSubField("value");
   if (auto scalar = std::dynamic_pointer_cast<const pvd::PVScalar>(value)) {
     s.type = QString::fromStdString(scalar->getScalar()->getID());

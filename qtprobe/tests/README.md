@@ -48,7 +48,16 @@ from 6 to 16 pt (remote X displays often render unhinted, with fractional
 widths): plot axis labels, elided labels and the History timestamp column must
 show their text in full. Enum trends are checked for state names, step drawing
 in the inspector and the table, no limit lines or gauge, and time-in-state
-statistics (core test with fixed receipt times, including a disconnect). Core
+statistics (core test with fixed receipt times, including a disconnect).
+Numeric arrays and text waveforms hide Trend, add no numeric history samples
+and leave the table sparkline empty, while scalars keep Trend.
+Structure browser tests cover in-place updates (rows, expansion and
+selection kept), default expansion of NT metadata, change marks on values and
+on collapsed parents, the search, row and whole-structure copies, the
+"more elements" row, CA PVs without Structure and release of hidden rows (UI,
+synthetic trees). Core tests check its text and JSON forms and the dotted Info
+paths derived from it. The IOC test reads an NTScalar and a QSRV group (an
+NTEnum member and a plain array) over PVA. Core
 tests cover record link parsing (PV links, constants, hardware and JSON links),
 the record-type field lists and every diagnosis rule. The IOC test reads a
 periodic calc with CP and forward links and a disabled record over CA and PVA,

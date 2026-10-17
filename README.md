@@ -10,7 +10,8 @@ export, sessions and a display-free `--info` command.
 
 The window is compact and fits its content, like the original Probe. With one
 PV it shows the live value, alarm state, an inline write box and toggles for
-the Trend, Adjust, Info, Array, History and Record sections. With several PVs
+the Trend, Adjust, Info, Array, History and Record sections, plus Structure, a
+live tree of every field, for PVA PVs. With several PVs
 a tab strip appears; the pinned **All** tab shows one table row per PV with its
 value, units, state, update age and a sparkline. The table sorts, filters to
 alarms or disconnected PVs, copies rows as text or CSV and works from the

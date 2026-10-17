@@ -234,6 +234,42 @@ private slots:
     QVERIFY(QJsonDocument::fromJson(process.readAllStandardOutput()).isArray());
     process.start(exe, {"--info", "--max-elements", "0", prefix + "number"}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitCode(), 2);
   }
+  void pvaStructureTree() {
+#if QTPROBE_HAVE_PVA
+    // An NTScalar: nested metadata with summaries, and Info's dotted paths from the same tree.
+    Channel n({prefix + "number", "pva"}); n.start();
+    QTRY_VERIFY_WITH_TIMEOUT(n.snapshot.hasValue && n.snapshot.structure, 10000);
+    const auto& root = *n.snapshot.structure;
+    QCOMPARE(root.type, QString("epics:nt/NTScalar:1.0"));
+    auto find = [](const FieldNode& node, const QString& name) -> const FieldNode* {
+      for (const auto& child : node.children) if (child.name == name) return &child;
+      return nullptr;
+    };
+    const auto* value = find(root, "value"); QVERIFY(value); QCOMPARE(value->type, QString("double"));
+    QCOMPARE(value->value, n.snapshot.values[0]); QCOMPARE(root.value, value->value);
+    const auto* alarm = find(root, "alarm"); QVERIFY(alarm); QVERIFY(!alarm->value.isEmpty()); QVERIFY(find(*alarm, "severity"));
+    const auto* stamp = find(root, "timeStamp"); QVERIFY(stamp); QCOMPARE(stamp->value, n.snapshot.timestamp());
+    const auto* display = find(root, "display"); QVERIFY(display); QCOMPARE(find(*display, "units")->value, QString("mA"));
+    QCOMPARE(n.snapshot.information().value("display.units"), QString("mA"));
+    // A QSRV group: its own ID, an NTEnum member summarized by its state and a plain array.
+    Channel g({prefix + "group", "pva"}); g.start();
+    QTRY_VERIFY_WITH_TIMEOUT(g.snapshot.hasValue && g.snapshot.structure, 10000);
+    QCOMPARE(g.snapshot.structure->type, QString("qtprobe:test/Group:1.0"));
+    const auto* mode = find(*g.snapshot.structure, "mode"); QVERIFY(mode); QVERIFY(find(*mode, "value"));
+    QVERIFY2(QRegularExpression("^\\([0-2]\\) (Off|On|Standby)$").match(find(*mode, "value")->value).hasMatch(), qPrintable(find(*mode, "value")->value));
+    Channel a({prefix + "array", "pva"}); a.start(); QTRY_VERIFY(a.snapshot.writable);
+    a.write("[1, 2, 3]");
+    QTRY_VERIFY_WITH_TIMEOUT(find(*g.snapshot.structure, "list") && find(*g.snapshot.structure, "list")->length == 3, 5000);
+    const auto* list = find(*g.snapshot.structure, "list");
+    QCOMPARE(list->kind, FieldNode::Array); QCOMPARE(list->type, QString("double[]")); QCOMPARE(list->value, QString("[1, 2, 3]"));
+    QCOMPARE(list->children.size(), 3); QCOMPARE(list->children[2].name, QString("[2]")); QCOMPARE(list->children[2].value, QString("3"));
+    QVERIFY(g.snapshot.valueText().contains("see Structure"));
+    // CA has no structure.
+    Channel ca({prefix + "number", "ca"}); ca.start(); QTRY_VERIFY_WITH_TIMEOUT(ca.snapshot.hasValue, 10000); QVERIFY(!ca.snapshot.structure);
+#else
+    QSKIP("Built without pvAccess");
+#endif
+  }
   void serverDeniesWritesAndInt64IsExact() {
     for (const auto& provider : providers()) {
       Channel protectedPv({prefix + "protected", provider}); protectedPv.start();

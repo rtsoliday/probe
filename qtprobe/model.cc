@@ -55,7 +55,7 @@ QString Snapshot::exactText() const {
   if (array) return "[" + values.mid(0, 12).join(", ") + (count > 12 ? ", …" : "") + "]";
   if (!choices.isEmpty() && std::isfinite(number) && number >= 0 && number < choices.size())
     return choices[int(number)] + " (" + values.value(0) + ")";
-  return values.value(0, "Structured data — see Info");
+  return values.value(0, "Structured data — see Structure");
 }
 QString Snapshot::editText() const {
   if (longString) return text;
@@ -95,7 +95,10 @@ QString Snapshot::valueText(const QString& format) const {
   return exactText();
 }
 QMap<QString, QString> Snapshot::information() const {
-  auto info = fields;
+  // PVA fields by dotted path, derived only when information is read.
+  QMap<QString, QString> info;
+  if (structure) flattenStructure(*structure, info);
+  for (auto it = fields.cbegin(); it != fields.cend(); ++it) info[it.key()] = it.value();
   info["PV"] = name; info["Provider"] = provider; info["Host"] = host;
   info["Active"] = connected ? "yes" : "no";
   info["Read access"] = readable ? "yes" : "no";
@@ -118,9 +121,47 @@ QJsonObject Snapshot::json() const {
   QJsonObject info;
   const auto map = information();
   for (auto it = map.cbegin(); it != map.cend(); ++it) info[it.key()] = it.value();
-  return {{"pv", name}, {"provider", provider}, {"connected", connected},
+  QJsonObject out{{"pv", name}, {"provider", provider}, {"connected", connected},
       {"values", QJsonArray::fromStringList(values)}, {"timestamp", timestamp()},
       {"severity", severityText()}, {"metadata", info}};
+  if (structure) out["structure"] = structureJson(*structure);
+  return out;
+}
+QString structureText(const FieldNode& node, int depth) {
+  QString text;
+  if (depth >= 0) {
+    text = QString(depth * 4, ' ') + node.type + (node.name.isEmpty() ? QString() : ' ' + node.name);
+    if (!node.value.isEmpty()) text += ' ' + node.value;
+    text += '\n';
+  }
+  for (const auto& child : node.children) text += structureText(child, depth + 1);
+  if (node.omitted) {
+    const char* what = node.kind == FieldNode::Structure ? "fields" : node.kind == FieldNode::Union ? "members" : "elements";
+    text += QString((depth + 1) * 4, ' ') + QString("… %1 more %2\n").arg(node.omitted).arg(what);
+  }
+  return text;
+}
+QJsonObject structureJson(const FieldNode& node) {
+  QJsonObject out{{"name", node.name}, {"type", node.type}};
+  if (!node.value.isEmpty()) out["value"] = node.value;
+  if (node.kind == FieldNode::Array || node.kind == FieldNode::StructureArray || node.kind == FieldNode::UnionArray) out["length"] = double(node.length);
+  if (node.omitted) out["omitted"] = double(node.omitted);
+  if (!node.children.isEmpty()) {
+    QJsonArray children; for (const auto& child : node.children) children.append(structureJson(child));
+    out["fields"] = children;
+  }
+  return out;
+}
+namespace {
+void flattenInto(const FieldNode& node, const QString& path, QMap<QString, QString>& out, int limit) {
+  if (out.size() >= limit) return;
+  // Arrays are one entry: their summary, not each element.
+  if (node.kind == FieldNode::Scalar || node.kind == FieldNode::Array || (node.children.isEmpty() && !node.value.isEmpty())) { out[path] = node.value; return; }
+  for (const auto& child : node.children) flattenInto(child, path + (child.name.startsWith('[') ? "" : ".") + child.name, out, limit);
+}
+} // namespace
+void flattenStructure(const FieldNode& root, QMap<QString, QString>& out, int limit) {
+  for (const auto& child : root.children) flattenInto(child, child.name, out, limit);
 }
 namespace {
 std::atomic<size_t> historyBytes{0}, historyBudget{size_t(256) << 20};
@@ -143,7 +184,8 @@ void History::append(const Snapshot& s) {
   Sample sample;
   sample.value = bounded(s.exactText()); sample.seconds = s.seconds; sample.nanoseconds = s.nanoseconds;
   sample.receivedMs = QDateTime::currentMSecsSinceEpoch();
-  sample.number = s.hasValue && s.numeric && s.connected && s.readable ? s.number : std::numeric_limits<double>::quiet_NaN();
+  // An array's first element is not a trend of the PV, so arrays add no numeric sample.
+  sample.number = s.hasValue && s.numeric && !s.array && s.connected && s.readable ? s.number : std::numeric_limits<double>::quiet_NaN();
   sample.severity = s.severity; sample.connected = s.connected; sample.serial = ++nextSerial_;
   const auto added = sampleBytes(sample);
   samples.push_back(std::move(sample)); bytes_ += added; historyBytes += added;

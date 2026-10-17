@@ -208,6 +208,39 @@ private slots:
     QVERIFY(plotEnvelope({}, 10).isEmpty());
     values.fill(std::numeric_limits<double>::quiet_NaN()); QCOMPARE(plotEnvelope(values, 100), QVector<int>{-1});
   }
+  void structureTextJsonAndFlatten() {
+    auto field = [](const char* name, const char* type, const char* value, FieldNode::Kind kind = FieldNode::Scalar) {
+      FieldNode n; n.name = name; n.type = type; n.value = value; n.kind = kind; return n;
+    };
+    FieldNode root = field("", "epics:nt/NTTable:1.0", "", FieldNode::Structure);
+    auto value = field("value", "structure", "", FieldNode::Structure);
+    auto position = field("position", "double[]", "[0, 1.5, …]", FieldNode::Array); position.length = 5; position.omitted = 3;
+    position.children << field("[0]", "double", "0") << field("[1]", "double", "1.5");
+    value.children << position;
+    auto items = field("items", "structure[]", "1 elements", FieldNode::StructureArray); items.length = 1;
+    auto element = field("[0]", "structure", "", FieldNode::Structure); element.children << field("x", "int", "7"); items.children << element;
+    auto choice = field("choice", "any", "", FieldNode::Union); choice.children << field("(any)", "string", "on");
+    auto alarm = field("alarm", "alarm_t", "MAJOR · HIHI", FieldNode::Structure); alarm.children << field("severity", "int", "2");
+    root.children << value << items << choice << alarm;
+    const auto text = structureText(root, -1);
+    QVERIFY(text.startsWith("structure value\n    double[] position [0, 1.5, …]\n        double [0] 0\n"));
+    QVERIFY(text.contains("        … 3 more elements\n")); QVERIFY(text.contains("alarm_t alarm MAJOR · HIHI\n"));
+    QVERIFY(structureText(root).startsWith("epics:nt/NTTable:1.0\n"));
+    // Paths join members with dots and elements with brackets; arrays stay one entry.
+    QMap<QString, QString> flat; flattenStructure(root, flat);
+    QCOMPARE(flat.value("value.position"), QString("[0, 1.5, …]")); QVERIFY(!flat.contains("value.position[0]"));
+    QCOMPARE(flat.value("items[0].x"), QString("7")); QCOMPARE(flat.value("choice.(any)"), QString("on"));
+    QCOMPARE(flat.value("alarm.severity"), QString("2"));
+    QMap<QString, QString> bounded; flattenStructure(root, bounded, 2); QCOMPARE(bounded.size(), 2);
+    const auto json = structureJson(root);
+    QCOMPARE(json["type"].toString(), QString("epics:nt/NTTable:1.0"));
+    const auto first = json["fields"].toArray()[0].toObject()["fields"].toArray()[0].toObject();
+    QCOMPARE(first["name"].toString(), QString("position")); QCOMPARE(first["length"].toDouble(), 5.0);
+    QCOMPARE(first["omitted"].toDouble(), 3.0); QCOMPARE(first["fields"].toArray().size(), 2);
+    Snapshot s; QVERIFY(!s.json().contains("structure"));
+    s.structure = std::make_shared<FieldNode>(root); QCOMPARE(s.json()["structure"].toObject()["type"].toString(), QString("epics:nt/NTTable:1.0"));
+    s.hasValue = true; QCOMPARE(s.valueText(), QString("Structured data — see Structure"));
+  }
 };
 QTEST_GUILESS_MAIN(CoreTest)
 #include "test_core.moc"
