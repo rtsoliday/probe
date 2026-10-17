@@ -1,0 +1,2 @@
+# The same name as fixture.db's longout, served by another record type after an IOC restart.
+record(ao, "$(P)retype") { field(VAL, "12.75") field(PREC, "3") field(PINI, "YES") }

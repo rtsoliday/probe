@@ -36,6 +36,8 @@ class Ca final : public Connection {
   std::shared_ptr<Context> context;
   chid id = nullptr, procId = nullptr;
   evid monitor = nullptr, properties = nullptr;
+  // Request types of the subscriptions above; CA keeps them across reconnects.
+  long monitorType = -1, propertiesType = -1;
   struct Extra { Ca* owner; QString field; chid id = nullptr; evid monitor = nullptr; };
   std::vector<std::unique_ptr<Extra>> extras;
   Snapshot s;
@@ -67,16 +69,23 @@ class Ca final : public Connection {
     s.array = s.capacity > 1; s.numeric = native != DBF_STRING;
     s.bytes = native == DBF_CHAR && s.array;
     s.metadataReady = false; s.fields.clear(); s.choices.clear();
+    // The PV may return with another native type (a changed record); the
+    // server would convert values to the old request type, so resubscribe.
+    const long valueType = dbf_type_to_DBR_TIME(native), metaType = native == DBF_STRING ? -1 : native == DBF_ENUM ? DBR_CTRL_ENUM : DBR_CTRL_DOUBLE;
+    if (c->monitor && c->monitorType != valueType) { ca_clear_subscription(c->monitor); c->monitor = nullptr; }
+    if (c->properties && c->propertiesType != metaType) { ca_clear_subscription(c->properties); c->properties = nullptr; }
     if (native == DBF_STRING) s.metadataReady = true;
     else {
-      const auto type = native == DBF_ENUM ? DBR_CTRL_ENUM : DBR_CTRL_DOUBLE;
-      c->fail(ca_array_get_callback(type, 1, a.chid, metadata, c));
-      if (!c->properties)
-        c->fail(ca_create_subscription(type, 1, a.chid, DBE_PROPERTY, metadata, c, &c->properties));
+      c->fail(ca_array_get_callback(metaType, 1, a.chid, metadata, c));
+      if (!c->properties) {
+        c->fail(ca_create_subscription(metaType, 1, a.chid, DBE_PROPERTY, metadata, c, &c->properties));
+        c->propertiesType = metaType;
+      }
     }
-    if (!c->monitor)
-      c->fail(ca_create_subscription(dbf_type_to_DBR_TIME(native), 0,
-          a.chid, DBE_VALUE | DBE_ALARM, value, c, &c->monitor));
+    if (!c->monitor) {
+      c->fail(ca_create_subscription(valueType, 0, a.chid, DBE_VALUE | DBE_ALARM, value, c, &c->monitor));
+      c->monitorType = valueType;
+    }
     ca_flush_io();
   }
   static void metadata(event_handler_args a) {

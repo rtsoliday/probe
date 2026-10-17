@@ -26,7 +26,7 @@ class IocTest : public QObject {
 #endif
     return p;
   }
-  void launch() {
+  void launch(const QString& database = {}) {
     const QString executable = QString(EPICS_TEST_BIN) +
 #if QTPROBE_HAVE_PVA
         "/softIocPVA";
@@ -34,7 +34,7 @@ class IocTest : public QObject {
         "/softIoc";
 #endif
     ioc.setProcessChannelMode(QProcess::MergedChannels);
-    ioc.start(executable, {"-m", "P=" + prefix, "-a", QFINDTESTDATA("fixture.acf"), "-d", QFINDTESTDATA("fixture.db")});
+    ioc.start(executable, {"-m", "P=" + prefix, "-a", QFINDTESTDATA("fixture.acf"), "-d", database.isEmpty() ? QFINDTESTDATA("fixture.db") : database});
     QVERIFY2(ioc.waitForStarted(5000), qPrintable(ioc.errorString()));
     QTest::qWait(300);
     QVERIFY2(ioc.state() == QProcess::Running, ioc.readAll().constData());
@@ -391,6 +391,16 @@ private slots:
       c->write("14"); QTRY_COMPARE(result.size(), 1); QVERIFY(result[0][0].toBool());
       QTRY_COMPARE(c->snapshot.number, 14.0);
     }
+  }
+  void typeChangeAcrossReconnect() {
+    // The IOC returns with another record type under the same name: CA subscribes with the new type.
+    Channel c({prefix + "retype", "ca"}); c.start();
+    QTRY_VERIFY_WITH_TIMEOUT(c.snapshot.hasValue, 10000); QCOMPARE(c.snapshot.values.value(0), QString("12"));
+    ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); QTRY_VERIFY_WITH_TIMEOUT(!c.snapshot.connected, 15000);
+    launch(QFINDTESTDATA("fixture-retyped.db"));
+    QTRY_VERIFY_WITH_TIMEOUT(c.snapshot.connected && c.snapshot.hasValue && c.snapshot.metadataReady && c.snapshot.type == "DBF_DOUBLE", 20000);
+    QTRY_COMPARE(c.snapshot.values.value(0), QString("12.75")); QCOMPARE(c.snapshot.valueText(), QString("12.750"));
+    ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
   }
   void cleanupTestCase() {
     ioc.terminate(); if (!ioc.waitForFinished(3000)) { ioc.kill(); ioc.waitForFinished(); } saveLog();
