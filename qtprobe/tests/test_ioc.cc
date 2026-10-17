@@ -96,8 +96,10 @@ private slots:
     for (const auto& provider : providers()) {
       Channel e({prefix + "enum", provider}); e.start();
       QTRY_VERIFY_WITH_TIMEOUT(e.snapshot.hasValue && e.snapshot.writable && e.snapshot.choices.size() == 3, 10000);
-      e.write("Standby"); QTRY_COMPARE(e.snapshot.number, 2.0);
-      e.write("On"); QTRY_COMPARE(e.snapshot.number, 1.0);
+      // A monitor update can arrive before the put completes; wait for completion before the next write.
+      QSignalSpy enumWrites(&e, &Channel::writeFinished);
+      e.write("Standby"); QTRY_COMPARE(e.snapshot.number, 2.0); QTRY_COMPARE(enumWrites.size(), 1); QVERIFY(enumWrites[0][0].toBool());
+      e.write("On"); QTRY_COMPARE(e.snapshot.number, 1.0); QTRY_COMPARE(enumWrites.size(), 2);
       Channel t({prefix + "text", provider}); t.start(); QTRY_VERIFY(t.snapshot.hasValue && t.snapshot.writable);
       // Each write completes (PVA string writes are read back) before the next one.
       QSignalSpy textWrites(&t, &Channel::writeFinished);
