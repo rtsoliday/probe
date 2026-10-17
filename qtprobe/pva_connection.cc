@@ -1,0 +1,324 @@
+// PVA worker callbacks copy bounded snapshots into an inbox; Qt owns all UI.
+#include "channel.h"
+#include <stdexcept>
+#if QTPROBE_HAVE_PVA
+#include <pv/clientFactory.h>
+#include <pv/createRequest.h>
+#include <pv/pvAccess.h>
+#include <pv/pvData.h>
+#include <cmath>
+#include <type_traits>
+#include <deque>
+#include <mutex>
+#include <sstream>
+#include <functional>
+namespace pva = epics::pvAccess;
+namespace pvd = epics::pvData;
+namespace probe {
+namespace {
+QString scalarText(const pvd::PVScalar& value) {
+  switch (value.getScalar()->getScalarType()) {
+  case pvd::pvFloat: return QString::number(value.getAs<float>(), 'g', 9);
+  case pvd::pvDouble: return QString::number(value.getAs<double>(), 'g', 17);
+  default: return QString::fromStdString(value.getAs<std::string>());
+  }
+}
+template<class T> void arrayValues(const pvd::PVScalarArray& value, QStringList& out, int limit) {
+  const auto& array = static_cast<const pvd::PVValueArray<T>&>(value);
+  const auto data = array.view();
+  for (size_t i = 0; i < std::min<size_t>(data.size(), size_t(limit)); ++i) {
+    if constexpr (std::is_same_v<T, std::string>) out << QString::fromStdString(data[i]);
+    else if constexpr (std::is_floating_point_v<T>) out << QString::number(data[i], 'g', sizeof(T) == 4 ? 9 : 17);
+    else if constexpr (std::is_signed_v<T>) out << QString::number(qlonglong(data[i]));
+    else out << QString::number(qulonglong(data[i]));
+  }
+}
+void arrayText(const pvd::PVScalarArray& array, QStringList& out, int limit) {
+  switch (array.getScalarArray()->getElementType()) {
+#define ARRAY(KIND, TYPE) case pvd::KIND: arrayValues<TYPE>(array, out, limit); break
+  ARRAY(pvBoolean, pvd::boolean); ARRAY(pvByte, pvd::int8); ARRAY(pvUByte, pvd::uint8);
+  ARRAY(pvShort, pvd::int16); ARRAY(pvUShort, pvd::uint16);
+  ARRAY(pvInt, pvd::int32); ARRAY(pvUInt, pvd::uint32);
+  ARRAY(pvLong, pvd::int64); ARRAY(pvULong, pvd::uint64);
+  ARRAY(pvFloat, float); ARRAY(pvDouble, double); ARRAY(pvString, std::string);
+#undef ARRAY
+  }
+}
+void flatten(const pvd::PVField::shared_pointer& field, const QString& path, QMap<QString, QString>& out) {
+  if (out.size() >= 512) return;
+  if (auto scalar = std::dynamic_pointer_cast<pvd::PVScalar>(field)) out[path] = scalarText(*scalar);
+  else if (auto array = std::dynamic_pointer_cast<pvd::PVScalarArray>(field)) {
+    QStringList values; arrayText(*array, values, 16);
+    out[path] = '[' + values.join(", ") + (array->getLength() > 16 ? ", …]" : "]");
+  } else if (auto structure = std::dynamic_pointer_cast<pvd::PVStructure>(field)) {
+    const auto& names = structure->getStructure()->getFieldNames();
+    const auto& fields = structure->getPVFields();
+    for (size_t i = 0; i < names.size(); ++i)
+      flatten(fields[i], path.isEmpty() ? QString::fromStdString(names[i]) : path + '.' + QString::fromStdString(names[i]), out);
+  } else out[path] = QString::fromStdString(field->getField()->getID()) + " (inspection only)";
+}
+double number(const pvd::PVStructure& data, const char* path, double fallback = 0) {
+  auto v = data.getSubField<pvd::PVScalar>(path); return v ? v->getAs<double>() : fallback;
+}
+QString text(const pvd::PVStructure& data, const char* path) {
+  auto v = data.getSubField<pvd::PVScalar>(path); return v ? scalarText(*v) : QString();
+}
+Snapshot extract(const pvd::PVStructure& data, int limit) {
+  Snapshot s;
+  s.connected = s.readable = s.metadataReady = true;
+  s.structureId = QString::fromStdString(data.getStructure()->getID());
+  s.units = text(data, "display.units"); s.description = text(data, "display.description");
+  s.precision = int(number(data, "display.precision", -1));
+  s.severity = int(number(data, "alarm.severity")); s.status = int(number(data, "alarm.status"));
+  s.alarmMessage = text(data, "alarm.message");
+  s.seconds = qint64(number(data, "timeStamp.secondsPastEpoch"));
+  s.nanoseconds = int(number(data, "timeStamp.nanoseconds"));
+  s.displayLow = number(data, "display.limitLow"); s.displayHigh = number(data, "display.limitHigh");
+  s.controlLow = number(data, "control.limitLow"); s.controlHigh = number(data, "control.limitHigh");
+  const double none = std::numeric_limits<double>::quiet_NaN();
+  s.alarmLow = number(data, "valueAlarm.lowAlarmLimit", none); s.warningLow = number(data, "valueAlarm.lowWarningLimit", none);
+  s.warningHigh = number(data, "valueAlarm.highWarningLimit", none); s.alarmHigh = number(data, "valueAlarm.highAlarmLimit", none);
+  const auto& names = data.getStructure()->getFieldNames();
+  const auto& fields = data.getPVFields();
+  for (size_t i = 0; i < names.size(); ++i) flatten(fields[i], QString::fromStdString(names[i]), s.fields);
+  auto value = data.getSubField("value");
+  if (auto scalar = std::dynamic_pointer_cast<const pvd::PVScalar>(value)) {
+    s.type = QString::fromStdString(scalar->getScalar()->getID());
+    s.values << scalarText(*scalar); s.count = 1;
+    s.numeric = scalar->getScalar()->getScalarType() != pvd::pvString;
+    if (s.numeric) s.number = scalar->getAs<double>();
+  } else if (auto array = std::dynamic_pointer_cast<const pvd::PVScalarArray>(value)) {
+    s.type = QString::fromStdString(array->getScalarArray()->getID());
+    s.array = true; s.count = array->getLength(); s.capacity = array->getCapacity();
+    s.truncated = s.count > quint64(limit); arrayText(*array, s.values, limit);
+    const auto element = array->getScalarArray()->getElementType();
+    s.numeric = element != pvd::pvString; s.bytes = element == pvd::pvByte || element == pvd::pvUByte;
+    if (s.numeric && !s.values.isEmpty()) s.number = s.values[0].toDouble();
+  } else if (auto index = data.getSubField<pvd::PVInt>("value.index")) {
+    s.type = "enum"; s.numeric = true; s.number = index->get(); s.count = 1;
+    s.values << QString::number(index->get());
+    if (auto choices = data.getSubField<pvd::PVStringArray>("value.choices"))
+      arrayValues<std::string>(*choices, s.choices, 65536);
+  } else s.type = value ? QString::fromStdString(value->getField()->getID()) : "structure (no value field)";
+  s.hasValue = true;
+  return s;
+}
+struct Event {
+  enum Kind { Connected, Disconnected, Data, Error, PutReady, PutDone } kind;
+  bool ok = true;
+  QString message;
+  Snapshot snapshot;
+  pvd::StructureConstPtr structure;
+  quint64 epoch = 0;
+  explicit Event(Kind k, bool success = true, QString msg = {}) : kind(k), ok(success), message(std::move(msg)) {}
+};
+struct Inbox {
+  std::mutex mutex;
+  std::function<void()> wake;
+  bool active = true;
+  std::deque<Event> queue;
+  void post(Event e) {
+    std::lock_guard<std::mutex> guard(mutex);
+    if (!active) return;
+    const bool notify = queue.empty();
+    // Coalesce adjacent data events to keep a fast IOC from growing the queue.
+    if (e.kind == Event::Data && !queue.empty() && queue.back().kind == Event::Data && queue.back().epoch == e.epoch) {
+      const auto skipped = queue.back().snapshot.fields.value("Client coalesced updates").toULongLong() + 1;
+      e.snapshot.fields["Client coalesced updates"] = QString::number(skipped);
+      queue.back() = std::move(e);
+    } else if (queue.size() < 256) queue.push_back(std::move(e));
+    if (notify && wake) wake();
+  }
+};
+struct ChannelRequester : pva::ChannelRequester {
+  std::shared_ptr<Inbox> inbox;
+  explicit ChannelRequester(std::shared_ptr<Inbox> i) : inbox(std::move(i)) {}
+  std::string getRequesterName() override { return "qtprobe"; }
+  void message(const std::string&, pvd::MessageType) override {}
+  void channelCreated(const pvd::Status& status, const pva::Channel::shared_pointer&) override {
+    if (!status.isSuccess()) inbox->post(Event(Event::Error, false, QString::fromStdString(status.getMessage())));
+  }
+  void channelStateChange(const pva::Channel::shared_pointer&, pva::Channel::ConnectionState state) override {
+    if (state == pva::Channel::CONNECTED) inbox->post(Event(Event::Connected));
+    else if (state == pva::Channel::DISCONNECTED || state == pva::Channel::DESTROYED) inbox->post(Event(Event::Disconnected));
+  }
+};
+struct MonitorRequester : pva::MonitorRequester {
+  std::shared_ptr<Inbox> inbox;
+  int limit;
+  quint64 epoch;
+  MonitorRequester(std::shared_ptr<Inbox> i, int l, quint64 e) : inbox(std::move(i)), limit(l), epoch(e) {}
+  std::string getRequesterName() override { return "qtprobe"; }
+  void message(const std::string&, pvd::MessageType) override {}
+  void report(const pvd::Status& status) {
+    if (!status.isSuccess()) { Event e(Event::Error, false, QString::fromStdString(status.getMessage())); e.epoch = epoch; inbox->post(std::move(e)); }
+  }
+  void monitorConnect(const pvd::Status& status, const pva::MonitorPtr& monitor, const pvd::StructureConstPtr&) override {
+    if (!status.isSuccess()) { report(status); return; }
+    report(monitor->start());
+  }
+  void monitorEvent(const pva::MonitorPtr& monitor) override {
+    while (auto element = monitor->poll()) {
+      Event e(Event::Data); e.epoch = epoch;
+      try { e.snapshot = extract(*element->pvStructurePtr, limit); }
+      catch (const std::exception& ex) { e = Event(Event::Error, false, QString::fromLocal8Bit(ex.what())); e.epoch = epoch; }
+      monitor->release(element); inbox->post(std::move(e));
+    }
+  }
+  void unlisten(const pva::MonitorPtr&) override {
+    Event e(Event::Error, false, "PVA monitor ended"); e.epoch = epoch; inbox->post(std::move(e));
+  }
+};
+struct PutRequester : pva::ChannelPutRequester {
+  std::shared_ptr<Inbox> inbox;
+  quint64 epoch;
+  PutRequester(std::shared_ptr<Inbox> i, quint64 e) : inbox(std::move(i)), epoch(e) {}
+  std::string getRequesterName() override { return "qtprobe"; }
+  void message(const std::string&, pvd::MessageType) override {}
+  void channelPutConnect(const pvd::Status& status, const pva::ChannelPut::shared_pointer&, const pvd::StructureConstPtr& structure) override {
+    Event e(Event::PutReady, status.isSuccess(), QString::fromStdString(status.getMessage()));
+    e.structure = structure; e.epoch = epoch; inbox->post(std::move(e));
+  }
+  void putDone(const pvd::Status& status, const pva::ChannelPut::shared_pointer&) override {
+    Event e(Event::PutDone, status.isSuccess(), QString::fromStdString(status.getMessage())); e.epoch = epoch; inbox->post(std::move(e));
+  }
+  void getDone(const pvd::Status&, const pva::ChannelPut::shared_pointer&, const pvd::PVStructure::shared_pointer&, const pvd::BitSet::shared_pointer&) override {}
+};
+QString validate(QString text, pvd::ScalarType type) {
+  if (type == pvd::pvString) return text;
+  if (type == pvd::pvBoolean) {
+    if (text == "true" || text == "1") return "true";
+    if (text == "false" || text == "0") return "false";
+    throw std::runtime_error("Boolean value must be true, false, 1 or 0");
+  }
+  bool ok = false;
+  if (type == pvd::pvFloat || type == pvd::pvDouble) {
+    const double n = text.toDouble(&ok);
+    if (!ok || !std::isfinite(n) || (type == pvd::pvFloat && std::abs(n) > std::numeric_limits<float>::max()))
+      throw std::runtime_error("Invalid or out-of-range floating-point value");
+    return text;
+  }
+  const bool unsignedType = type == pvd::pvUByte || type == pvd::pvUShort || type == pvd::pvUInt || type == pvd::pvULong;
+  int bits = type == pvd::pvByte || type == pvd::pvUByte ? 8 : type == pvd::pvShort || type == pvd::pvUShort ? 16 : type == pvd::pvInt || type == pvd::pvUInt ? 32 : 64;
+  const int base = text.startsWith("0x") || text.startsWith("0b") ? 0 : 10;
+  if (unsignedType) {
+    const auto n = text.toULongLong(&ok, base);
+    if (ok && !text.trimmed().startsWith('-') && (bits == 64 || n < (quint64(1) << bits))) return QString::number(n);
+  } else {
+    const auto n = text.toLongLong(&ok, base);
+    if (ok && (bits == 64 || (n >= -(qint64(1) << (bits - 1)) && n < (qint64(1) << (bits - 1))))) return QString::number(n);
+  }
+  throw std::runtime_error("Invalid or out-of-range integer value");
+}
+class Pva final : public Connection {
+  Channel& owner;
+  Address address;
+  int limit;
+  quint64 epoch = 0, sequence = 0;
+  Snapshot s;
+  std::shared_ptr<Inbox> inbox = std::make_shared<Inbox>();
+  pva::ChannelProvider::shared_pointer provider;
+  pva::Channel::shared_pointer channel;
+  pva::ChannelRequester::shared_pointer channelRequester;
+  pva::MonitorRequester::shared_pointer monitorRequester;
+  pva::ChannelPutRequester::shared_pointer putRequester;
+  pva::MonitorPtr monitor;
+  pva::ChannelPut::shared_pointer put;
+  pvd::StructureConstPtr putStructure;
+  void clearOperations() {
+    ++epoch;
+    putStructure.reset();
+    if (monitor) monitor->destroy();
+    monitor.reset(); monitorRequester.reset();
+    if (put) put->destroy();
+    put.reset(); putRequester.reset();
+  }
+public:
+  Pva(Channel& o, Address a, int l) : owner(o), address(a), limit(l) {
+    s.name = a.name; s.provider = "pva";
+    pva::ClientFactory::start(); provider = pva::ChannelProviderRegistry::clients()->getProvider("pva");
+    if (!provider) throw std::runtime_error("EPICS pvAccess provider unavailable");
+    channelRequester = std::make_shared<ChannelRequester>(inbox);
+    channel = provider->createChannel(a.name.toStdString(), channelRequester, pva::ChannelProvider::PRIORITY_DEFAULT);
+    // Install only after construction succeeds. post() and destruction use
+    // the same lock; queued calls belong to the QObject owner and never
+    // capture a backend that reconnect could delete. start() drains anything
+    // posted before this notifier was installed.
+    { std::lock_guard<std::mutex> guard(inbox->mutex);
+      inbox->wake = [target = &owner] {
+        QMetaObject::invokeMethod(target, [target] { target->requestPoll(); }, Qt::QueuedConnection);
+      };
+    }
+  }
+  ~Pva() override {
+    { std::lock_guard<std::mutex> guard(inbox->mutex); inbox->active = false; inbox->queue.clear(); }
+    clearOperations(); if (channel) channel->destroy();
+  }
+  void poll() override {
+    std::deque<Event> events;
+    { std::lock_guard<std::mutex> guard(inbox->mutex); events.swap(inbox->queue); }
+    for (auto& e : events) {
+      if (e.epoch && e.epoch != epoch) continue;
+      switch (e.kind) {
+      case Event::Connected:
+        clearOperations(); s.connected = true; s.hasValue = s.writable = false; s.error.clear();
+        s.host = QString::fromStdString(channel->getRemoteAddress());
+        monitorRequester = std::make_shared<MonitorRequester>(inbox, limit, epoch);
+        monitor = channel->createMonitor(monitorRequester, pvd::CreateRequest::create()->createRequest("field()"));
+        putRequester = std::make_shared<PutRequester>(inbox, epoch);
+        put = channel->createChannelPut(putRequester, pvd::CreateRequest::create()->createRequest("field(value)"));
+        break;
+      case Event::Disconnected:
+        clearOperations(); s.connected = s.readable = s.writable = false;
+        s.error = "Disconnected; reconnecting automatically";
+        if (owner.writePending()) owner.completeWrite(false, "Disconnected during write; outcome unknown.");
+        break;
+      case Event::Data: {
+        auto incoming = std::move(e.snapshot);
+        incoming.host = s.host; incoming.writable = s.writable;
+        incoming.name = address.name; incoming.provider = "pva"; incoming.sequence = ++sequence;
+        s = std::move(incoming); break;
+      }
+      case Event::PutReady:
+        if (e.ok && e.structure) {
+          putStructure = e.structure;
+          const auto data = pvd::getPVDataCreate()->createPVStructure(putStructure);
+          auto value = data->getSubField("value");
+          if (value && value->getField()->getType() == pvd::structure) value = data->getSubField("value.index");
+          s.writable = value && (value->getField()->getType() == pvd::scalar || value->getField()->getType() == pvd::scalarArray) && channel->getAccessRights(value) == pva::readWrite;
+        } else { s.writable = false; s.fields["Write setup"] = e.message; }
+        break;
+      case Event::PutDone: owner.completeWrite(e.ok, e.message); break;
+      case Event::Error: s.error = e.message; break;
+      }
+      owner.update(s);
+    }
+  }
+  void write(const QStringList& values) override {
+    if (!channel || !channel->isConnected() || !s.writable || !put || !putStructure)
+      throw std::runtime_error("PVA write operation unavailable");
+    auto data = pvd::getPVDataCreate()->createPVStructure(putStructure);
+    auto value = data->getSubField("value");
+    if (value && value->getField()->getType() == pvd::structure) value = data->getSubField("value.index");
+    if (auto scalar = std::dynamic_pointer_cast<pvd::PVScalar>(value))
+      scalar->putFrom<std::string>(validate(values[0], scalar->getScalar()->getScalarType()).toStdString());
+    else if (auto array = std::dynamic_pointer_cast<pvd::PVScalarArray>(value)) {
+      pvd::shared_vector<std::string> input;
+      for (const auto& v : values) input.push_back(validate(v, array->getScalarArray()->getElementType()).toStdString());
+      array->putFrom<std::string>(pvd::freeze(input));
+    } else throw std::runtime_error("This PVA structure is inspection only");
+    pvd::BitSet::shared_pointer bits(new pvd::BitSet);
+    bits->set(pvd::uint32(value->getFieldOffset()));
+    put->put(data, bits);
+  }
+};
+} // namespace
+std::unique_ptr<Connection> createPva(Channel& o, const Address& a, int l) { return std::make_unique<Pva>(o, a, l); }
+} // namespace probe
+#else
+namespace probe {
+std::unique_ptr<Connection> createPva(Channel&, const Address&, int) {
+  throw std::runtime_error("Built without pvAccess. Rebuild against EPICS 7 Base with pvAccess and pvData.");
+}
+}
+#endif

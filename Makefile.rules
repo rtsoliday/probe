@@ -1,0 +1,106 @@
+# Standalone discovery and output conventions shared with the other Qt ports.
+RULES_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+ifneq ($(filter Windows Windows_NT,$(OS)),)
+OS := Windows
+ARCH ?= x86_64
+else
+OS := $(shell uname -s)
+ARCH := $(shell uname -m)
+endif
+PKG_CONFIG ?= $(firstword $(wildcard /usr/bin/pkg-config) pkg-config)
+PYTHON ?= $(if $(filter Windows,$(OS)),python,python3)
+BIN_DIR ?= $(RULES_DIR)bin/$(OS)-$(ARCH)
+OBJ_DIR ?= O.$(OS)-$(ARCH)
+CUSTOM_GCC_PATH ?= /usr/local/oag/3rdParty/gcc-11.3.0
+ifeq ($(OS),Linux)
+ifneq ($(wildcard $(CUSTOM_GCC_PATH)/bin/g++),)
+ifeq ($(origin CXX),default)
+CXX := $(CUSTOM_GCC_PATH)/bin/g++
+CC := $(CUSTOM_GCC_PATH)/bin/gcc
+LDFLAGS += -static-libstdc++
+endif
+endif
+endif
+
+# A configured extensions tree may choose Base and a shared install location.
+EXTENSIONS_TOP := $(abspath $(RULES_DIR)../..)
+ifeq ($(notdir $(abspath $(RULES_DIR)..)),src)
+ifneq ($(wildcard $(EXTENSIONS_TOP)/configure/RELEASE),)
+TOP := $(EXTENSIONS_TOP)
+EXPLICIT_EPICS_BASE := $(EPICS_BASE)
+include $(EXTENSIONS_TOP)/configure/RELEASE
+-include $(EXTENSIONS_TOP)/configure/RELEASE.local
+ifneq ($(EXPLICIT_EPICS_BASE),)
+EPICS_BASE := $(EXPLICIT_EPICS_BASE)
+endif
+EPICS_BIN_DIR ?= $(EXTENSIONS_TOP)/bin/$(EPICS_HOST_ARCH)
+endif
+endif
+EPICS_BASE ?= $(firstword $(foreach b,/usr/local/oag/base $(RULES_DIR)../epics-base $(RULES_DIR)../../../base $(HOME)/epics/base,$(if $(wildcard $(b)/include/cadef.h),$(b))))
+EPICS_ARCH_SCRIPT := $(firstword $(wildcard $(addprefix $(EPICS_BASE)/,lib/perl/EpicsHostArch.pl src/tools/EpicsHostArch.pl startup/EpicsHostArch.pl)))
+ifndef EPICS_HOST_ARCH
+EPICS_HOST_ARCH := $(if $(EPICS_ARCH_SCRIPT),$(shell perl $(EPICS_ARCH_SCRIPT)),$(if $(filter Windows,$(OS)),windows-x64,$(if $(filter Darwin,$(OS)),darwin-$(if $(filter arm64,$(ARCH)),aarch64,x86),linux-$(ARCH))))
+endif
+EPICS_LIB_DIR := $(EPICS_BASE)/lib/$(EPICS_HOST_ARCH)
+EPICS_COMPILER ?= $(if $(filter Darwin,$(OS)),clang,$(if $(filter Windows,$(OS)),msvc,gcc))
+EPICS_INCLUDES = -I$(EPICS_BASE)/include -I$(EPICS_BASE)/include/compiler/$(EPICS_COMPILER) -I$(EPICS_BASE)/include/os/$(if $(filter Windows,$(OS)),WIN32,$(OS))
+EPICS_SHARED_EXT := $(if $(filter Darwin,$(OS)),dylib,so)
+epics_lib = $(firstword $(wildcard $(EPICS_LIB_DIR)/lib$(1).a $(EPICS_LIB_DIR)/lib$(1).$(EPICS_SHARED_EXT)))
+CA_LIBS = $(foreach l,ca Com,$(call epics_lib,$(l)))
+PVA_LIBS = $(foreach l,pvAccess pvData,$(call epics_lib,$(l)))
+HAVE_PVA := $(if $(and $(wildcard $(EPICS_BASE)/include/pv/pvAccess.h),$(call epics_lib,pvAccess),$(call epics_lib,pvData)),1,0)
+EPICS_SYS_LIBS = -lpthread -lm $(if $(filter Linux,$(OS)),-ldl -lrt)
+ifneq ($(shell nm -u $(EPICS_LIB_DIR)/libCom.a 2>/dev/null | sed -n '/ U _\{0,1\}readline$$/p'),)
+EPICS_SYS_LIBS += -lreadline
+endif
+
+QMAKE6 ?= qmake6
+QT_VERSION ?= $(if $(filter Windows,$(OS)),6,$(if $(or $(shell $(PKG_CONFIG) --exists Qt6Widgets 2>/dev/null && echo yes),$(shell $(QMAKE6) -query QT_VERSION 2>/dev/null)),6,5))
+QT_PREFIX := Qt$(QT_VERSION)
+QT_CFLAGS = $(shell $(PKG_CONFIG) --cflags $(addprefix $(QT_PREFIX),Core Gui Widgets Network) 2>/dev/null)
+QT_LIBS = $(shell $(PKG_CONFIG) --libs $(addprefix $(QT_PREFIX),Core Gui Widgets Network) 2>/dev/null)
+QT_TEST_CFLAGS = $(shell $(PKG_CONFIG) --cflags $(QT_PREFIX)Test 2>/dev/null)
+QT_TEST_LIBS = $(shell $(PKG_CONFIG) --libs $(QT_PREFIX)Test 2>/dev/null)
+QT_HOST_BINS := $(shell $(PKG_CONFIG) --variable=host_bins $(QT_PREFIX)Core 2>/dev/null)
+QT_LIBEXEC := $(shell $(PKG_CONFIG) --variable=libexecdir $(QT_PREFIX)Core 2>/dev/null)
+HAVE_QT := $(shell $(PKG_CONFIG) --exists $(QT_PREFIX)Widgets 2>/dev/null && echo 1)
+# Qt 6 distribution SDKs sometimes provide qmake6 but no pkg-config files.
+ifeq ($(HAVE_QT),)
+QMAKE ?= $(if $(filter 6,$(QT_VERSION)),$(QMAKE6),qmake)
+QT_HEADERS := $(shell $(QMAKE) -query QT_INSTALL_HEADERS 2>/dev/null)
+QT_LIBRARY_DIR := $(shell $(QMAKE) -query QT_INSTALL_LIBS 2>/dev/null)
+ifneq ($(wildcard $(QT_HEADERS)/QtWidgets/QApplication),)
+HAVE_QT := 1
+QT_HOST_BINS := $(shell $(QMAKE) -query QT_HOST_BINS)
+QT_LIBEXEC := $(shell $(QMAKE) -query QT_HOST_LIBEXECS)
+QT_CFLAGS = $(addprefix -I,$(QT_HEADERS) $(addprefix $(QT_HEADERS)/Qt,Core Gui Widgets Network))
+QT_LIBS = -L$(QT_LIBRARY_DIR) $(addprefix -l$(QT_PREFIX),Widgets Gui Network Core)
+QT_TEST_CFLAGS = -I$(QT_HEADERS)/QtTest
+QT_TEST_LIBS = -L$(QT_LIBRARY_DIR) -l$(QT_PREFIX)Test
+endif
+endif
+MOC ?= $(firstword $(wildcard $(QT_LIBEXEC)/moc $(QT_HOST_BINS)/moc) moc)
+RCC ?= $(firstword $(wildcard $(QT_LIBEXEC)/rcc $(QT_HOST_BINS)/rcc) rcc)
+MOTIF_INC ?= $(firstword $(foreach d,/usr/include /opt/local/include /opt/X11/include,$(if $(wildcard $(d)/Xm/Xm.h),$(d))))
+X11_INC ?= $(firstword $(foreach d,/usr/include /opt/local/include /opt/X11/include,$(if $(wildcard $(d)/X11/Intrinsic.h),$(d))))
+GUI_LIB_DIRS = /usr/lib64 /usr/lib /usr/lib/$(ARCH)-linux-gnu /opt/local/lib /opt/X11/lib /opt/homebrew/lib /usr/local/lib
+MOTIF_LIB ?= $(patsubst %/,%,$(dir $(firstword $(wildcard $(addsuffix /libXm.*,$(GUI_LIB_DIRS))))))
+X11_LIB ?= $(patsubst %/,%,$(dir $(firstword $(wildcard $(addsuffix /libX11.*,$(GUI_LIB_DIRS))))))
+HAVE_MOTIF := $(if $(and $(MOTIF_INC),$(MOTIF_LIB),$(X11_INC),$(X11_LIB)),1)
+
+ifeq ($(OS),Windows)
+BIN_DIR := ../bin/Windows-$(ARCH)
+HAVE_MOTIF :=
+HAVE_PVA := $(if $(wildcard $(EPICS_LIB_DIR)/pvAccess.lib),1,0)
+CA_LIBS = $(EPICS_LIB_DIR)/ca.lib $(EPICS_LIB_DIR)/Com.lib
+PVA_LIBS = $(EPICS_LIB_DIR)/pvAccess.lib $(EPICS_LIB_DIR)/pvData.lib
+EPICS_SYS_LIBS = ws2_32.lib
+QT_DIR ?= C:/Qt/6.11.2/msvc2022_64
+QT_CFLAGS = -I$(QT_DIR)/include $(addprefix -I$(QT_DIR)/include/Qt,Core Gui Widgets Network)
+QT_LIBS = $(addprefix $(QT_DIR)/lib/Qt$(QT_VERSION),Widgets.lib Gui.lib Network.lib Core.lib)
+QT_TEST_CFLAGS = -I$(QT_DIR)/include/QtTest
+QT_TEST_LIBS = $(QT_DIR)/lib/Qt$(QT_VERSION)Test.lib
+MOC = $(QT_DIR)/bin/moc.exe
+RCC = $(QT_DIR)/bin/rcc.exe
+HAVE_QT := 1
+endif

@@ -1,0 +1,10 @@
+<RCC>
+  <qresource prefix="/">
+    <file>qtprobe.svg</file>
+    <file>chevron-light.svg</file>
+    <file>chevron-dark.svg</file>
+    <file>check-light.svg</file>
+    <file>check-dark.svg</file>
+    <file alias="guide.md">../../docs/qtprobe-guide.md</file>
+  </qresource>
+</RCC>

@@ -1,0 +1,20 @@
+record(ao, "$(P)number") {
+  field(DESC, "QtProbe local test value")
+  field(VAL, "12.5") field(PREC, "3") field(EGU, "mA")
+  field(LOPR, "-100") field(HOPR, "100") field(DRVL, "-100") field(DRVH, "100")
+  field(LOLO, "-80") field(LOW, "-60") field(HIGH, "60") field(HIHI, "80")
+  field(LLSV, "MAJOR") field(LSV, "MINOR") field(HSV, "MINOR") field(HHSV, "MAJOR")
+  field(PINI, "YES")
+}
+record(mbbo, "$(P)enum") {
+  field(ZRST, "Off") field(ONST, "On") field(TWST, "Standby") field(VAL, "1")
+}
+record(stringout, "$(P)text") { field(VAL, "hello") }
+record(longout, "$(P)integer") { field(VAL, "2147483647") }
+record(int64out, "$(P)int64") { field(VAL, "9223372036854775806") }
+record(ao, "$(P)protected") { field(VAL, "7") field(ASG, "READONLY") }
+record(waveform, "$(P)array") { field(FTVL, "DOUBLE") field(NELM, "8") }
+record(waveform, "$(P)longText") { field(FTVL, "CHAR") field(NELM, "64") }
+record(calc, "$(P)counter") { field(CALC, "A+1") field(INPA, "$(P)counter NPP") }
+record(calc, "$(P)calcLinked") { field(SCAN, "1 second") field(INPA, "$(P)number CP") field(CALC, "A*2") field(FLNK, "$(P)text") }
+record(ai, "$(P)disabled") { field(SCAN, "1 second") field(DISA, "1") field(DISV, "1") }
