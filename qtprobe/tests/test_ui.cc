@@ -368,6 +368,12 @@ private slots:
     emit inspector.findChild<QComboBox*>("enumChoice")->activated(2);  // "Standby" in the menu shown
     QString error; QCOMPARE(parseWrite(inspector.channel()->snapshot, inspector.findChild<QLineEdit*>("writeValue")->text(), &error), QStringList{"0"});
   }
+  void enumMenuBeforeFirstValue() {
+    // Enum metadata can arrive before the first value (NaN): the menu selects nothing.
+    Options options; options.connectOnOpen = false; Inspector inspector(Address::parse("E:early"), options); inspector.show();
+    Snapshot s = inspector.channel()->snapshot; s.connected = s.readable = s.writable = true; s.type = "DBF_ENUM"; s.choices = QStringList{"Off", "On"};
+    inspector.channel()->update(s); inspector.refresh(); QCOMPARE(inspector.findChild<QComboBox*>("enumChoice")->currentIndex(), -1);
+  }
   void confirmationShowsWhatIsSent() {
     // The question names enum states by label and counts array elements.
     Options options; options.connectOnOpen = false; Inspector inspector(Address::parse("C:gain"), options); inspector.show();

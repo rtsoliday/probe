@@ -661,7 +661,10 @@ void Inspector::refresh(bool allSections) {
   facts->setText(parts.join(" · ")); facts->setToolTip(s.host.isEmpty() ? QString() : "Host: " + s.host);
   setTone(facts, s.error.isEmpty() || s.error == "Stopped" ? "muted" : "warning");
   if (s.choices != lastChoices) { QSignalBlocker b(enumChoice); enumChoice->clear(); enumChoice->addItems(s.choices); lastChoices = s.choices; }
-  enumChoice->setVisible(!s.choices.isEmpty()); if (!s.choices.isEmpty()) { QSignalBlocker b(enumChoice); enumChoice->setCurrentIndex(int(s.number)); }
+  enumChoice->setVisible(!s.choices.isEmpty()); if (!s.choices.isEmpty()) {
+    // No value yet (NaN) or an index outside the list selects nothing.
+    QSignalBlocker b(enumChoice); enumChoice->setCurrentIndex(std::isfinite(s.number) && s.number >= 0 && s.number < s.choices.size() ? int(s.number) : -1);
+  }
   input->setPlaceholderText(s.longString ? "Text" : s.array ? "JSON array, for example [1, 2, 3]" : "New value");
   const bool numeric = s.numeric && !s.array && s.choices.isEmpty();
   gauge->setVisible(numeric && s.hasValue && s.displayHigh > s.displayLow);
