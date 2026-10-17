@@ -116,7 +116,7 @@ QString StructureBrowser::path(const QTreeWidgetItem* item) { return item ? item
 const FieldNode* StructureBrowser::node(const QTreeWidgetItem* item) const {
   return item && tree ? reinterpret_cast<const FieldNode*>(item->data(NameColumn, NodeRole).value<quintptr>()) : nullptr;
 }
-void StructureBrowser::release() { view->clear(); previous.clear(); tree.reset(); }
+void StructureBrowser::release() { view->clear(); previous.clear(); latest.clear(); tree.reset(); }
 void StructureBrowser::changeEvent(QEvent* event) {
   QWidget::changeEvent(event);
   // Marks use theme colors; repaint them for a new appearance.
