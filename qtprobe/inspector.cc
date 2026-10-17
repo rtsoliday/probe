@@ -487,7 +487,8 @@ Inspector::Inspector(Address address, Options options, QWidget* parent) : QWidge
       pendingLog = false; const auto& s = channel_->snapshot;
       logWrite({QDateTime::currentDateTime(), s.provider + "://" + s.name, pendingBefore, pendingAfter, message, ok});
       if (ok && !pendingProcess) {
-        undoValue = pendingBefore; undoValues = pendingBeforeValues; hasUndo = pendingUndoProblem.isEmpty(); undoUnavailable = pendingUndoProblem;
+        undoValue = pendingBefore; undoValues = pendingBeforeValues; undoType = pendingType; undoChoices = pendingChoices;
+        hasUndo = pendingUndoProblem.isEmpty(); undoUnavailable = pendingUndoProblem;
       } else if (channel_->writeUncertain()) {
         // The PV may hold the new value; an older Undo would not restore what this write replaced.
         hasUndo = false; undoUnavailable = "Undo unavailable: the outcome of your last write is unknown";
@@ -538,7 +539,8 @@ void Inspector::requestWrite(const QString& text) {
 void Inspector::requestUndo() {
   // The saved elements bypass text parsing, which depends on the PV's current
   // contents (enum labels, text in byte arrays).
-  if (hasUndo && beginWrite(undoValues, undoValue, true)) channel_->writeValues(undoValues);
+  const auto& s = channel_->snapshot;
+  if (hasUndo && s.type == undoType && s.choices == undoChoices && beginWrite(undoValues, undoValue, true)) channel_->writeValues(undoValues);
 }
 bool Inspector::beginWrite(const QStringList& sent, const QString& after, bool ask) {
   const auto& s = channel_->snapshot;
@@ -547,7 +549,7 @@ bool Inspector::beginWrite(const QStringList& sent, const QString& after, bool a
   pendingLog = true; pendingProcess = false; pendingBefore = current; pendingAfter = after;
   // Undo restores these exact elements; a truncated readback, or text decoded
   // from bytes that were not UTF-8, cannot be restored.
-  pendingBeforeValues = s.values;
+  pendingBeforeValues = s.values; pendingType = s.type; pendingChoices = s.choices;
   pendingUndoProblem = !s.hasValue || s.values.isEmpty() ? "Undo unavailable: there was no earlier value" :
       s.truncated ? "Undo unavailable: the readback before your last write was truncated" :
       s.values.join(QString()).contains(QChar::ReplacementCharacter) ? "Undo unavailable: the earlier value holds bytes that are not UTF-8" : QString();
@@ -617,8 +619,11 @@ void Inspector::refreshWriteControls() {
   const bool writable = !channel_->readOnly() && s.connected && s.writable && s.hasValue;
   const bool ready = writable && !channel_->writePending() && !channel_->writeUncertain();
   put->setEnabled(ready); input->setEnabled(writable); enumChoice->setEnabled(writable);
-  undo->setEnabled(ready && hasUndo);
-  undo->setToolTip(hasUndo ? "Restore " + preview(undoValue) + ", the value before your last write" :
+  // A PV that came back with another type or state list (an IOC reboot) cannot take the saved elements.
+  const bool undoFits = !s.hasValue || (s.type == undoType && s.choices == undoChoices);
+  undo->setEnabled(ready && hasUndo && undoFits);
+  undo->setToolTip(hasUndo && !undoFits ? "Undo unavailable: the PV's type or states changed since your last write" :
+      hasUndo ? "Restore " + preview(undoValue) + ", the value before your last write" :
       !undoUnavailable.isEmpty() ? undoUnavailable : "No write to undo yet");
   processButton->setVisible(!channel_->readOnly() && s.processable);
   processButton->setEnabled(s.connected && !channel_->writePending() && !channel_->writeUncertain());

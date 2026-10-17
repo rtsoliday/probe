@@ -104,7 +104,8 @@ private:
   QToolButton* processButton;
   QPushButton* undo;
   QString undoValue, pendingBefore, pendingAfter;
-  QStringList undoValues, pendingBeforeValues;
+  QStringList undoValues, pendingBeforeValues, undoChoices, pendingChoices;
+  QString undoType, pendingType;
   QPoint dragStart;
   bool hasUndo = false, pendingLog = false, pendingProcess = false;
   // Whether a byte array was shown as text when the editor's value was entered.

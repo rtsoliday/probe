@@ -557,6 +557,15 @@ private slots:
     QTRY_VERIFY_WITH_TIMEOUT(c.snapshot.connected && c.snapshot.hasValue && c.snapshot.metadataReady && c.snapshot.type == "DBF_DOUBLE", 20000);
     QTRY_COMPARE(c.snapshot.values.value(0), QString("12.75")); QCOMPARE(c.snapshot.valueText(), QString("12.750"));
     ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
+    // An inspector's Undo from before such a change is not offered for the new type.
+    Options options; Inspector inspector(Address::parse(prefix + "retype"), options); inspector.show(); auto* channel = inspector.channel();
+    QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.hasValue && channel->snapshot.writable && channel->snapshot.type == "DBF_LONG", 10000);
+    QSignalSpy done(channel, &Channel::writeFinished); inspector.requestWrite("13"); QTRY_COMPARE(done.size(), 1);
+    auto* undo = inspector.findChild<QPushButton*>("undoWriteButton"); QTRY_VERIFY(undo->isEnabled());
+    ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch(QFINDTESTDATA("fixture-retyped.db"));
+    QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.connected && channel->snapshot.hasValue && channel->snapshot.type == "DBF_DOUBLE", 20000);
+    inspector.refresh(); QVERIFY(!undo->isEnabled()); QVERIFY(undo->toolTip().contains("type"));
+    ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
   }
   void cleanupTestCase() {
     ioc.terminate(); if (!ioc.waitForFinished(3000)) { ioc.kill(); ioc.waitForFinished(); } saveLog();
