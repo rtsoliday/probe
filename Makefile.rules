@@ -12,8 +12,9 @@ PYTHON ?= $(if $(filter Windows,$(OS)),python,python3)
 BIN_DIR ?= $(RULES_DIR)bin/$(OS)-$(ARCH)
 OBJ_DIR ?= O.$(OS)-$(ARCH)
 CUSTOM_GCC_PATH ?= /usr/local/oag/3rdParty/gcc-11.3.0
+# An empty CUSTOM_GCC_PATH selects the system compiler; "/bin/g++" must not match.
 ifeq ($(OS),Linux)
-ifneq ($(wildcard $(CUSTOM_GCC_PATH)/bin/g++),)
+ifneq ($(and $(strip $(CUSTOM_GCC_PATH)),$(wildcard $(CUSTOM_GCC_PATH)/bin/g++)),)
 ifeq ($(origin CXX),default)
 CXX := $(CUSTOM_GCC_PATH)/bin/g++
 CC := $(CUSTOM_GCC_PATH)/bin/gcc
