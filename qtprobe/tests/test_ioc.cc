@@ -396,6 +396,20 @@ private slots:
       wide.write(text); ++n; QTRY_COMPARE(wrote.size(), n); QVERIFY2(wrote.back()[0].toBool(), qPrintable(text)); QTRY_COMPARE(wide.snapshot.number, expected);
     }
   }
+  void writeInterruptedByDisconnect() {
+    // A CA put still processing when the IOC goes away has an unknown outcome: writes wait for Reconnect.
+    Options options; Inspector slow(Address::parse(prefix + "slow.A"), options); slow.show(); auto* channel = slow.channel();
+    QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.hasValue && channel->snapshot.writable, 10000);
+    QSignalSpy done(channel, &Channel::writeFinished);
+    slow.requestWrite("1"); QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 5000); QVERIFY(done[0][0].toBool());
+    slow.requestWrite("2"); QTest::qWait(500); QVERIFY(channel->writePending());
+    ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog();
+    QTRY_COMPARE_WITH_TIMEOUT(done.size(), 2, 15000); QVERIFY(!done[1][0].toBool()); QVERIFY(done[1][1].toString().contains("outcome unknown"));
+    QVERIFY(channel->writeUncertain());
+    launch(); QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.connected && channel->snapshot.writable, 20000);
+    channel->write("3"); QCOMPARE(done.size(), 3); QVERIFY(!done[2][0].toBool());
+    channel->start(); QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.writable, 10000); QVERIFY(!channel->writeUncertain());
+  }
   void reconnectAfterIocRestart() {
     std::vector<std::unique_ptr<Channel>> channels;
     for (const auto& provider : providers()) { auto c = std::make_unique<Channel>(Address{prefix + "number", provider}); c->start(); channels.push_back(std::move(c)); }

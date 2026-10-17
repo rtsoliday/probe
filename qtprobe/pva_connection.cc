@@ -348,7 +348,7 @@ public:
       case Event::Disconnected:
         clearOperations(); s.connected = s.readable = s.writable = false;
         s.error = "Disconnected; reconnecting automatically";
-        if (owner.writePending()) owner.completeWrite(false, "Disconnected during write; outcome unknown.");
+        if (owner.writePending()) owner.completeWrite(false, "Disconnected during write; outcome unknown.", true);
         break;
       case Event::Data: {
         auto incoming = std::move(e.snapshot);

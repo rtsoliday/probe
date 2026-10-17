@@ -34,7 +34,8 @@ public:
   qint64 lastUpdateMs = 0;
   // Backends only call these on the Qt thread.
   void update(Snapshot);
-  void completeWrite(bool, QString);
+  // An uncertain outcome (timeout, disconnect) keeps writes disabled until start().
+  void completeWrite(bool, QString, bool uncertain = false);
   // Thread-safe delivery request. Bursts share one pending, bounded-rate drain.
   void requestPoll();
   bool writePending() const { return writePending_; }

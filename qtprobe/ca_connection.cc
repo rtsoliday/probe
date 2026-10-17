@@ -43,7 +43,7 @@ class Ca final : public Connection {
   std::vector<std::unique_ptr<Extra>> extras;
   Snapshot s;
   int limit;
-  bool dirty = true, closing = false, putDone = false, putOK = false, processing = false;
+  bool dirty = true, closing = false, putDone = false, putOK = false, putUncertain = false, processing = false;
   QString putMessage;
   void markDirty() { if (!dirty) { dirty = true; owner.requestPoll(); } }
   void fail(int status) { if (status != ECA_NORMAL) { s.error = ca_message(status); markDirty(); } }
@@ -170,7 +170,9 @@ class Ca final : public Connection {
   static void written(event_handler_args a) {
     auto c = static_cast<Ca*>(a.usr); if (!c || c->closing) return;
     c->putDone = true; c->putOK = a.status == ECA_NORMAL;
-    c->putMessage = c->putOK ? (c->processing ? "Record processed" : "Write completed") : QString::fromLocal8Bit(ca_message(a.status));
+    // A circuit lost before completion leaves the outcome unknown: the IOC may have applied it.
+    c->putUncertain = a.status == ECA_DISCONN;
+    c->putMessage = c->putOK ? (c->processing ? "Record processed" : "Write completed") : c->putUncertain ? "Disconnected during write; outcome unknown." : QString::fromLocal8Bit(ca_message(a.status));
     c->owner.requestPoll();
   }
   static void procAccess(access_rights_handler_args a) {
@@ -214,7 +216,7 @@ public:
   }
   void poll() override {
     if (dirty) { dirty = false; owner.update(s); }
-    if (putDone) { putDone = false; owner.completeWrite(putOK, putMessage); }
+    if (putDone) { putDone = false; owner.completeWrite(putOK, putMessage, putUncertain); }
   }
   void process() override {
     if (!procId || ca_state(procId) != cs_conn || !ca_write_access(procId))

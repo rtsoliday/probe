@@ -21,8 +21,7 @@ Channel::Channel(Address a, bool ro, int maxElements, int historySize, double ti
   });
   writeDeadline.setSingleShot(true);
   connect(&writeDeadline, &QTimer::timeout, this, [this] {
-    writeUncertain_ = true;
-    completeWrite(false, "Write completion timed out; outcome unknown. Check readback and reconnect before retrying.");
+    completeWrite(false, "Write completion timed out; outcome unknown. Check readback and reconnect before retrying.", true);
   });
 }
 Channel::~Channel() { timer.stop(); connection.reset(); }
@@ -45,7 +44,7 @@ void Channel::requestPoll() {
 void Channel::stop() {
   timer.stop(); deadline.stop(); writeDeadline.stop();
   connection.reset();
-  if (writePending_) completeWrite(false, "Disconnected before write completion; outcome unknown.");
+  if (writePending_) completeWrite(false, "Disconnected before write completion; outcome unknown.", true);
   if (snapshot.connected) {
     auto s = snapshot; s.connected = s.readable = s.writable = false; s.error = "Stopped"; update(s);
   }
@@ -88,9 +87,9 @@ void Channel::process() {
   catch (const std::exception& e) { completeWrite(false, QString::fromLocal8Bit(e.what())); }
   emit changed();
 }
-void Channel::completeWrite(bool ok, QString message) {
+void Channel::completeWrite(bool ok, QString message, bool uncertain) {
   if (!writePending_) return;
-  writePending_ = false; writeDeadline.stop();
+  writePending_ = false; writeDeadline.stop(); writeUncertain_ = writeUncertain_ || uncertain;
   emit writeFinished(ok, message.isEmpty() ? (ok ? "Write completed" : "Write failed") : message);
   emit changed();
 }
