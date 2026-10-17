@@ -1,6 +1,7 @@
 #include "appearance.h"
 #include <QApplication>
 #include <QFontDatabase>
+#include <QHash>
 #include <algorithm>
 #include <cmath>
 #include <QPainter>
@@ -160,8 +161,19 @@ void setTone(QWidget* widget, const QString& tone) {
   if (widget->property("tone").toString() == tone) return;
   widget->setProperty("tone", tone); widget->style()->unpolish(widget); widget->style()->polish(widget); widget->update();
 }
+namespace {
+// Icons are drawn once per symbol and color and shared by every button, so
+// each new inspector adds no pixmaps (or pixmap-cache entries) of its own.
+QIcon* cachedIcon(int symbol, const QColor& color) {
+  static QHash<QPair<int, QRgb>, QIcon>* icons = nullptr;
+  if (!icons) { icons = new QHash<QPair<int, QRgb>, QIcon>; qAddPostRoutine([] { delete icons; icons = nullptr; }); }
+  return &(*icons)[qMakePair(symbol, color.rgba())];
+}
+} // namespace
 QIcon dotIcon(const QColor& color) {
-  QIcon result;
+  auto* cached = cachedIcon(-1, color);
+  if (!cached->isNull()) return *cached;
+  auto& result = *cached;
   for (int scale : {1, 2, 3}) {
     QPixmap image(12 * scale, 12 * scale); image.setDevicePixelRatio(scale); image.fill(Qt::transparent);
     QPainter p(&image); p.setRenderHint(QPainter::Antialiasing); p.setPen(Qt::NoPen); p.setBrush(color);
@@ -170,7 +182,9 @@ QIcon dotIcon(const QColor& color) {
   return result;
 }
 QIcon symbolIcon(Symbol symbol, const QColor& color) {
-  QIcon result;
+  auto* cached = cachedIcon(int(symbol), color);
+  if (!cached->isNull()) return *cached;
+  auto& result = *cached;
   for (int scale : {1, 2, 3}) {
     QPixmap image(20 * scale, 20 * scale); image.setDevicePixelRatio(scale); image.fill(Qt::transparent);
     QPainter p(&image); p.setRenderHint(QPainter::Antialiasing);
