@@ -89,6 +89,8 @@ public:
   std::function<void()> logged;
   // Sends the text like Write; Undo and the editor use this path.
   void requestWrite(const QString&);
+  // Writes back the exact elements your last write replaced.
+  void requestUndo();
   // Opens a PV named by a record link (a uri such as ca://REC).
   std::function<void(const QString& uri)> openLink;
   void requestProcess();
@@ -102,8 +104,10 @@ private:
   QToolButton* processButton;
   QPushButton* undo;
   QString undoValue, pendingBefore, pendingAfter;
+  QStringList undoValues, pendingBeforeValues;
   QPoint dragStart;
-  bool hasUndo = false, pendingLog = false, pendingProcess = false;
+  bool hasUndo = false, undoLost = false, pendingLog = false, pendingProcess = false, pendingUndoable = false;
+  bool beginWrite(const QString& shown);
   QScrollArea* scroll;
   QWidget *body, *writeArea;
   ElidedLabel *heading, *description, *value, *writeStatus;

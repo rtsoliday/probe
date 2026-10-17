@@ -66,6 +66,12 @@ void Channel::write(const QString& text) {
   QString error;
   const auto values = parseWrite(snapshot, text, &error);
   if (!error.isEmpty()) { emit writeFinished(false, error); return; }
+  writeValues(values);
+}
+void Channel::writeValues(const QStringList& values) {
+  if (readOnly_ || !snapshot.connected || !snapshot.writable || !connection || writePending_ || writeUncertain_ || values.isEmpty()) {
+    emit writeFinished(false, "Write unavailable: read-only, disconnected, denied, pending or uncertain completion."); return;
+  }
   writePending_ = true;
   writeDeadline.start(10000);
   try { connection->write(values); }

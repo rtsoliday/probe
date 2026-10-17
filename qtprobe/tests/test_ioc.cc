@@ -327,6 +327,29 @@ private slots:
       writeLog().clear();
     }
   }
+  void undoRestoresExactElements() {
+    for (const auto& provider : providers()) {
+      // Bytes that read as binary, replaced by text: Undo restores the bytes, not their JSON text.
+      Channel raw({prefix + "longText", provider}); raw.start(); QTRY_VERIFY_WITH_TIMEOUT(raw.snapshot.hasValue && raw.snapshot.writable, 10000);
+      QSignalSpy rawWrites(&raw, &Channel::writeFinished); raw.writeValues({"0", "1", "2"}); QTRY_COMPARE(rawWrites.size(), 1);
+      QTRY_COMPARE(raw.snapshot.values, (QStringList{"0", "1", "2"}));
+      Options options; options.provider = provider;
+      { Inspector text(Address::parse(prefix + "longText", provider), options); text.show(); auto* channel = text.channel();
+        QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.hasValue && channel->snapshot.writable && channel->snapshot.count == 3, 10000); QVERIFY(!channel->snapshot.longString);
+        text.requestWrite("[104, 105, 0]"); QTRY_COMPARE(raw.snapshot.text, QString("hi"));
+        auto* undo = text.findChild<QPushButton*>("undoWriteButton"); QTRY_VERIFY(undo->isEnabled()); undo->click();
+        QTRY_COMPARE(raw.snapshot.values, (QStringList{"0", "1", "2"})); }
+      // A truncated readback cannot be restored, so Undo stays unavailable.
+      Channel full({prefix + "array", provider}); full.start(); QTRY_VERIFY_WITH_TIMEOUT(full.snapshot.writable, 10000);
+      full.write("[1, 2, 3, 4, 5, 6, 7, 8]"); QTRY_COMPARE(full.snapshot.count, quint64(8));
+      options.maxElements = 4;
+      Inspector capped(Address::parse(prefix + "array", provider), options); capped.show(); auto* channel = capped.channel();
+      QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.writable && channel->snapshot.truncated, 10000);
+      QSignalSpy done(channel, &Channel::writeFinished); capped.requestWrite("[9, 9, 9, 9, 9, 9, 9, 9]"); QTRY_COMPARE(done.size(), 1); QVERIFY(done[0][0].toBool());
+      auto* undo = capped.findChild<QPushButton*>("undoWriteButton"); QVERIFY(!undo->isEnabled()); QVERIFY(undo->toolTip().contains("truncated"));
+      capped.requestUndo(); QTest::qWait(150); QCOMPARE(done.size(), 1); QTRY_COMPARE(full.snapshot.count, quint64(8));
+    }
+  }
   void reconnectAfterIocRestart() {
     std::vector<std::unique_ptr<Channel>> channels;
     for (const auto& provider : providers()) { auto c = std::make_unique<Channel>(Address{prefix + "number", provider}); c->start(); channels.push_back(std::move(c)); }

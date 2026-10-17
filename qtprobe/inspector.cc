@@ -359,7 +359,7 @@ Inspector::Inspector(Address address, Options options, QWidget* parent) : QWidge
   writeStatus = elided("writeStatus", "muted", 0.86); writeLayout->addWidget(writeStatus); layout->addWidget(writeArea);
   connect(put, &QPushButton::clicked, this, [this] { requestWrite(input->text()); });
   connect(input, &QLineEdit::returnPressed, this, [this] { if (put->isEnabled()) requestWrite(input->text()); });
-  connect(undo, &QPushButton::clicked, this, [this] { if (hasUndo) requestWrite(undoValue); });
+  connect(undo, &QPushButton::clicked, this, [this] { requestUndo(); });
   connect(input, &QLineEdit::textEdited, this, [this] { lastWriteMessage.clear(); refreshWriteControls(); });
   connect(enumChoice, QOverload<int>::of(&QComboBox::activated), this, [this](int i) {
     // Stage text that selects this state even when labels read as indices.
@@ -471,7 +471,7 @@ Inspector::Inspector(Address address, Options options, QWidget* parent) : QWidge
     if (pendingLog) {
       pendingLog = false; const auto& s = channel_->snapshot;
       logWrite({QDateTime::currentDateTime(), s.provider + "://" + s.name, pendingBefore, pendingAfter, message, ok});
-      if (ok && !pendingProcess) { undoValue = pendingBefore; hasUndo = true; }
+      if (ok && !pendingProcess) { undoValue = pendingBefore; undoValues = pendingBeforeValues; hasUndo = pendingUndoable; undoLost = !pendingUndoable; }
       if (logged) logged();
     }
     refreshWriteControls();
@@ -502,11 +502,20 @@ void Inspector::releaseViews(int sections) {
   if (released) dirty = true;
 }
 void Inspector::requestWrite(const QString& text) {
+  if (beginWrite(text)) channel_->write(text);
+}
+void Inspector::requestUndo() {
+  // The saved elements bypass text parsing, which depends on the PV's current
+  // contents (enum labels, text in byte arrays).
+  if (hasUndo && beginWrite(undoValue)) channel_->writeValues(undoValues);
+}
+bool Inspector::beginWrite(const QString& shown) {
   const auto& s = channel_->snapshot;
-  const auto before = s.hasValue ? s.editText() : QString();
-  if (confirm && !confirm(QString("Write %1 to %2?\nCurrent value: %3").arg(preview(text), s.name, preview(before)))) return;
-  pendingLog = true; pendingProcess = false; pendingBefore = before; pendingAfter = text;
-  channel_->write(text);
+  if (confirm && !confirm(QString("Write %1 to %2?\nCurrent value: %3").arg(preview(shown), s.name, preview(s.hasValue ? s.editText() : QString())))) return false;
+  pendingLog = true; pendingProcess = false; pendingBefore = s.hasValue ? s.editText() : QString(); pendingAfter = shown;
+  // Undo restores these exact elements; a truncated readback cannot be restored.
+  pendingBeforeValues = s.values; pendingUndoable = s.hasValue && !s.truncated && !s.values.isEmpty();
+  return true;
 }
 void Inspector::requestProcess() {
   const auto& s = channel_->snapshot;
@@ -569,7 +578,8 @@ void Inspector::refreshWriteControls() {
   const bool ready = writable && !channel_->writePending() && !channel_->writeUncertain();
   put->setEnabled(ready); input->setEnabled(writable); enumChoice->setEnabled(writable);
   undo->setEnabled(ready && hasUndo);
-  undo->setToolTip(hasUndo ? "Restore " + preview(undoValue) + ", the value before your last write" : "No write to undo yet");
+  undo->setToolTip(hasUndo ? "Restore " + preview(undoValue) + ", the value before your last write" :
+      undoLost ? "Undo unavailable: the readback before your last write was truncated" : "No write to undo yet");
   processButton->setVisible(!channel_->readOnly() && s.processable);
   processButton->setEnabled(s.connected && !channel_->writePending() && !channel_->writeUncertain());
   useReadback->setEnabled(writable && s.readable && (!s.array || !s.truncated) && (s.choices.isEmpty() || !s.editText().isEmpty()));

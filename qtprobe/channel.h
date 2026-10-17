@@ -26,6 +26,8 @@ public:
   void start();
   void stop();
   void write(const QString&);
+  // Writes element values as given, without parsing text (Undo uses this).
+  void writeValues(const QStringList&);
   // Writes 1 to the record's PROC field (CA).
   void process();
   // Client time of the last value update, in ms since the epoch; 0 if none.
