@@ -83,15 +83,20 @@ StructureBrowser::StructureBrowser(QWidget* parent) : QWidget(parent) {
   connect(collapse, &QToolButton::clicked, this, [this] { for (QTreeWidgetItemIterator it(view); *it; ++it) if ((*it)->childCount()) setOpen(*it, false); });
   connect(copy, &QToolButton::clicked, this, [this] { if (tree) QApplication::clipboard()->setText(structureText(*tree, -1)); });
   connect(view, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
-    auto* item = view->itemAt(pos); const auto* field = node(item);
-    if (!field) return;
+    auto* item = view->itemAt(pos);
+    if (!node(item)) return;
+    const auto where = path(item);
     QMenu menu(this);
     auto* copyValue = menu.addAction("Copy value"); auto* copyPath = menu.addAction("Copy field path");
     auto* copyRow = menu.addAction("Copy row"); auto* copyFields = menu.addAction("Copy field with contents");
     QAction *expandBelow = nullptr, *collapseBelow = nullptr;
     if (item->childCount()) { menu.addSeparator(); expandBelow = menu.addAction("Expand all below"); collapseBelow = menu.addAction("Collapse all below"); }
     auto* picked = menu.exec(view->viewport()->mapToGlobal(pos));
-    if (!picked) return;
+    // Monitor updates while the menu was open may have replaced the tree and its rows.
+    item = nullptr;
+    for (QTreeWidgetItemIterator it(view); *it; ++it) if (path(*it) == where) { item = *it; break; }
+    const auto* field = node(item);
+    if (!picked || !field) return;
     auto below = [this](QTreeWidgetItem* top, bool on) {
       std::function<void(QTreeWidgetItem*)> walk = [&](QTreeWidgetItem* i) { if (i->childCount()) setOpen(i, on); for (int c = 0; c < i->childCount(); ++c) walk(i->child(c)); };
       walk(top);

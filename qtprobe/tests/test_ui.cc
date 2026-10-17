@@ -326,6 +326,23 @@ private slots:
     QVERIFY(value->findChild<Plot*>("trendPlot")->levels.isEmpty()); QVERIFY(value->findChild<QLabel*>("trendStatistics")->text().contains("Mean"));
     QSettings().setValue("sections", 0);
   }
+  void structureMenuSurvivesUpdates() {
+    // An update while a field's menu is open replaces the tree; the chosen action uses the live rows.
+    QSettings().setValue("sections", int(StructureSection));
+    Options options; options.connectOnOpen = false; Window window(options); window.show();
+    window.addPv("pva://S:menu"); auto* pva = inspectorAt(window, 0);
+    auto s = pva->channel()->snapshot; s.connected = s.readable = s.hasValue = s.numeric = true;
+    s.type = "double"; s.values = QStringList{"1"}; s.number = 1; s.count = 1; s.structure = structureDemo("1", "100"); s.sequence = 1;
+    pva->channel()->update(s); pva->refresh();
+    auto* tree = pva->findChild<QTreeWidget*>("structureFields"); QApplication::clipboard()->clear();
+    bool chosen = false;
+    QTimer::singleShot(100, &window, [&] {
+      s.structure = structureDemo("2", "101"); s.sequence = 2; pva->channel()->update(s); pva->refresh();
+      if (auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget())) { QTest::keyClick(menu, Qt::Key_Down); QTest::keyClick(menu, Qt::Key_Return); chosen = true; }
+    });
+    emit tree->customContextMenuRequested(tree->visualItemRect(tree->topLevelItem(0)).center());
+    QVERIFY(chosen); QCOMPARE(QApplication::clipboard()->text(), QString("2"));
+  }
   void structureBrowserUpdatesInPlaceFiltersAndCopies() {
     QSettings().setValue("sections", int(StructureSection));
     Options options; options.connectOnOpen = false; Window window(options); window.show();
