@@ -64,7 +64,9 @@ class Ca final : public Connection {
       s.error = "Disconnected; reconnecting automatically";
       return;
     }
-    s.error.clear(); s.hasValue = false; s.host = QString::fromLocal8Bit(ca_host_name(a.chid));
+    // ca_host_name() points into a cache that CA's resolver thread rewrites; this copies under its lock.
+    char host[256]; ca_get_host_name(a.chid, host, sizeof host);
+    s.error.clear(); s.hasValue = false; s.host = QString::fromLocal8Bit(host);
     const auto native = ca_field_type(a.chid);
     s.type = dbf_type_to_text(native); s.capacity = ca_element_count(a.chid);
     s.array = s.capacity > 1; s.numeric = native != DBF_STRING;
