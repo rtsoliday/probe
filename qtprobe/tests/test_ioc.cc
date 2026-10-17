@@ -484,6 +484,19 @@ private slots:
     QTRY_COMPARE(array.snapshot.count, quint64(4));
     QCOMPARE(array.snapshot.values, (QStringList{"1e+100", "-1e+100", "9.2233720368547758e+18", "0.125"}));
   }
+  void caInt64ArrayFractionalValues() {
+    Channel integer({prefix + "int64Array", "ca"}); integer.start();
+    Channel wide({prefix + "array", "ca"}); wide.start();
+    QTRY_VERIFY_WITH_TIMEOUT(integer.snapshot.hasValue && integer.snapshot.writable && wide.snapshot.hasValue && wide.snapshot.writable, 10000);
+    QSignalSpy integerWrites(&integer, &Channel::writeFinished), wideWrites(&wide, &Channel::writeFinished);
+    const QString input = "[\"9223372036854775806\", \"1e-100\", \"-1e-100\", \"1.5\"]";
+    integer.write(input); QTRY_COMPARE(integerWrites.size(), 1); QVERIFY(integerWrites[0][0].toBool());
+    QTRY_COMPARE(integer.snapshot.count, quint64(4));
+    QCOMPARE(integer.snapshot.values.mid(1), (QStringList{"0", "0", "1"}));
+    wide.write(input); QTRY_COMPARE(wideWrites.size(), 1); QVERIFY(wideWrites[0][0].toBool());
+    QTRY_COMPARE(wide.snapshot.count, quint64(4));
+    QCOMPARE(wide.snapshot.values.mid(1), (QStringList{"1e-100", "-1e-100", "1.5"}));
+  }
   void slowRecordWriteCompletes() {
     // A put-callback still processing after 10 s on a connected PV keeps waiting and then reports its real result.
     Options options; Inspector slow(Address::parse(prefix + "slower.A"), options); slow.show(); auto* channel = slow.channel();

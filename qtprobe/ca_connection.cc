@@ -273,15 +273,22 @@ public:
           const auto trimmed = values[i].trimmed(); const double number = data[size_t(i)];
           QString encoded;
           if (integer.match(trimmed).hasMatch()) encoded = trimmed;
-          else if (std::abs(number) >= 1e38) {
+          else if (std::abs(number) >= 1e38 || (number != 0 && std::abs(number) < 1)) {
             // IOC integer parsers accept a numeric prefix and ignore an
             // exponent, so "1e100" would silently write 1 to an int64 field.
             // Keep 21 digits before the exponent: the prefix overflows both
             // int64 and uint64, while a double parser gets the same value.
             const auto scientific = QString::number(std::abs(number), 'e', 16);
             const auto e = scientific.indexOf('e');
-            const auto digits = scientific.left(e).remove('.').leftJustified(21, '0');
-            encoded = (number < 0 ? "-" : "") + digits + 'e' + QString::number(scientific.mid(e + 1).toInt() - 20);
+            const auto digits = scientific.left(e).remove('.');
+            const auto exponent = scientific.mid(e + 1).toInt();
+            const QString sign = number < 0 ? "-" : "";
+            if (std::abs(number) >= 1e38)
+              encoded = sign + digits.leftJustified(21, '0') + 'e' + QString::number(exponent - 20);
+            else
+              // A tiny array peer must convert to integer zero, not the
+              // mantissa prefix ("1e-100" otherwise becomes integer 1).
+              encoded = sign + "0." + digits + 'e' + QString::number(exponent + 1);
           } else encoded = std::trunc(number) == number ? QString::number(number, 'f', 0) : QString::number(number, 'g', 17);
           const auto bytes = encoded.toLatin1();
           if (bytes.size() >= MAX_STRING_SIZE) throw std::runtime_error("Numeric text exceeds the CA string size");
