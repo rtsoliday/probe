@@ -33,8 +33,11 @@ class IocTest : public QObject {
 #else
         "/softIoc";
 #endif
+    // Without its fixtures softIoc would start empty and every test would time out.
+    const auto acf = QFINDTESTDATA("fixture.acf"), db = database.isEmpty() ? QFINDTESTDATA("fixture.db") : database;
+    QVERIFY2(!acf.isEmpty() && !db.isEmpty(), "Fixtures not found; run make -C qtprobe test-ioc");
     ioc.setProcessChannelMode(QProcess::MergedChannels);
-    ioc.start(executable, {"-m", "P=" + prefix, "-a", QFINDTESTDATA("fixture.acf"), "-d", database.isEmpty() ? QFINDTESTDATA("fixture.db") : database});
+    ioc.start(executable, {"-m", "P=" + prefix, "-a", acf, "-d", db});
     QVERIFY2(ioc.waitForStarted(5000), qPrintable(ioc.errorString()));
     QTest::qWait(300);
     QVERIFY2(ioc.state() == QProcess::Running, ioc.readAll().constData());
