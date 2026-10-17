@@ -1080,6 +1080,8 @@ bool Window::addPvs(const QStringList& texts) {
 void Window::closePv(int index) {
   if (index < 0 || index >= stack->count()) return;
   auto* widget = stack->widget(index);
+  // Complete a pending write or Process as "outcome unknown" so the inspector logs it.
+  if (auto* channel = static_cast<Inspector*>(widget)->channel(); channel->writePending()) channel->stop();
   comparison->remove(static_cast<Inspector*>(widget)->channel());
   { QSignalBlocker stackBlock(stack), tabBlock(pvTabs); stack->removeWidget(widget); pvTabs->removeTab(index); }
   delete widget; navigationDirty = true; updateNavigation();

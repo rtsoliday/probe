@@ -319,6 +319,23 @@ private slots:
     QTRY_COMPARE(n.snapshot.values[0], QString("-9223372036854775808"));
 #endif
   }
+  void closingPvLogsPendingWrite() {
+    // A PV closed before its write completes keeps a write-log entry with an unknown outcome.
+    Options options; writeLog().clear(); Window window(options);
+    QStringList names; for (const auto& provider : providers()) names << provider + "://" + prefix + "number";
+    window.addPvs(names);
+    for (int i = 0; i < window.inspectors()->count(); ++i) {
+      auto* inspector = static_cast<Inspector*>(window.inspectors()->widget(i));
+      QTRY_VERIFY_WITH_TIMEOUT(inspector->channel()->snapshot.hasValue && inspector->channel()->snapshot.writable, 10000);
+    }
+    const int count = window.inspectors()->count();
+    for (int i = 0; i < count; ++i) {
+      auto* inspector = static_cast<Inspector*>(window.inspectors()->widget(0));
+      inspector->requestWrite("12.5"); QVERIFY(inspector->channel()->writePending()); window.closePv(0);
+      QCOMPARE(writeLog().size(), size_t(i + 1)); QVERIFY(!writeLog().back().ok); QVERIFY(writeLog().back().result.contains("outcome unknown"));
+    }
+    writeLog().clear();
+  }
   void enumLabelsReadingAsIndices() {
     for (const auto& provider : providers()) {
       // State "4" is index 2 and label "2" is index 1: the state list, Readback and Undo select the intended state.
