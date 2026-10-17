@@ -217,7 +217,8 @@ write from this inspector; its tooltip shows that value. Undo is itself a
 write, so pressing it again restores the value it replaced. Undo sends the
 saved elements as they were received, so enum states and byte arrays are
 restored exactly. It is unavailable after a write that replaced a truncated
-array (see `--max-elements`), because the full earlier value is not known.
+array (see `--max-elements`), because the full earlier value is not known, and
+after a write whose outcome is unknown, because the PV may hold either value.
 
 **Process** (the circled triangle beside Reconnect) writes 1 to the record's
 PROC field, as `caput rec.PROC 1` does. It appears for Channel Access PVs when
