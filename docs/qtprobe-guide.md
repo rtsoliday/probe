@@ -212,12 +212,19 @@ hidden in a read-only session and for PVs the server reports as not writable;
 they stay in place during a disconnect. The IOC remains authoritative for
 access and accepted limits. Write results and errors appear on the line below
 the box. Adjust has Min, Max and Step fields, a slider between − and + step
-buttons, and **Dial** reveals the optional dial. A completion timeout means the
-outcome is unknown; inspect readback and reconnect before another write is
-enabled.
+buttons, and **Dial** reveals the optional dial. CA writes and Process use a
+put with completion callback (unlike the Motif Probe's plain put): the result
+line reports completion after the record finishes processing, and no other
+write to that PV is sent meanwhile. If completion takes longer than 10 s (a
+long motor move or another asynchronous record), the outcome is reported as
+unknown; inspect readback and reconnect before another write is enabled. Stop
+fields such as a motor's `STOP` are separate PVs and can be written from their
+own inspector.
 
-**Undo** writes back the exact value the PV had before your last successful
-write from this inspector; its tooltip shows that value. Undo is itself a
+**Undo** writes back the exact value QtProbe last received before your last
+successful write from this inspector; its tooltip shows that value. A monitor
+deadband (`MDEL`, or a `dbnd` filter in the name) can hide small changes made
+by others since then; the confirmation's current value is that same value. Undo is itself a
 write, so pressing it again restores the value it replaced. Undo sends the
 saved elements as they were received, so enum states and byte arrays are
 restored exactly. It is unavailable after a write that replaced a truncated
