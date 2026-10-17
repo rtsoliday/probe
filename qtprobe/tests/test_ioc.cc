@@ -66,6 +66,11 @@ private slots:
     qputenv("EPICS_PVA_AUTO_ADDR_LIST", "NO"); qputenv("EPICS_PVA_ADDR_LIST", "127.0.0.1");
     qputenv("EPICS_PVA_SERVER_PORT", QByteArray::number(base + 2)); qputenv("EPICS_PVA_BROADCAST_PORT", QByteArray::number(base + 3));
     qputenv("EPICS_PVAS_INTF_ADDR_LIST", "127.0.0.1");
+    // Inherited name servers would bypass the address lists; server and beacon settings stay on loopback.
+    qunsetenv("EPICS_CA_NAME_SERVERS"); qunsetenv("EPICS_PVA_NAME_SERVERS");
+    qputenv("EPICS_CAS_SERVER_PORT", QByteArray::number(base)); qputenv("EPICS_CAS_AUTO_BEACON_ADDR_LIST", "NO");
+    qputenv("EPICS_PVAS_SERVER_PORT", QByteArray::number(base + 2)); qputenv("EPICS_PVAS_BROADCAST_PORT", QByteArray::number(base + 3));
+    qputenv("EPICS_PVAS_AUTO_BEACON_ADDR_LIST", "NO"); qputenv("EPICS_PVAS_BEACON_ADDR_LIST", "127.0.0.1");
     repeater.start(QString(EPICS_TEST_BIN) + "/caRepeater", {"-v"});
     QVERIFY(repeater.waitForStarted(5000));
     launch();

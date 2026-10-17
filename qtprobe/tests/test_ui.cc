@@ -45,6 +45,7 @@ private slots:
     qputenv("EPICS_CA_AUTO_ADDR_LIST", "NO"); qputenv("EPICS_CA_ADDR_LIST", "127.0.0.1:59991");
     qputenv("EPICS_CA_REPEATER_PORT", "59992");
     qputenv("EPICS_PVA_AUTO_ADDR_LIST", "NO"); qputenv("EPICS_PVA_ADDR_LIST", "127.0.0.1:59993");
+    qunsetenv("EPICS_CA_NAME_SERVERS"); qunsetenv("EPICS_PVA_NAME_SERVERS");
   }
   static Inspector* inspectorAt(Window& window, int index) { return static_cast<Inspector*>(window.inspectors()->widget(index)); }
   static void publishDemo(Inspector* inspector, int pv, int samples = 180) {

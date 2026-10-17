@@ -45,13 +45,17 @@ def main():
     binary = str(Path(sys.argv[1]).resolve())
     epics = Path(os.environ.get("EPICS_TEST_BIN", "/usr/local/oag/base/bin/linux-x86_64"))
     base = ports()
-    env = dict(os.environ, QT_QPA_PLATFORM="offscreen",
+    # Inherited name servers would bypass the loopback address lists.
+    env = {k: v for k, v in os.environ.items() if k not in ("EPICS_CA_NAME_SERVERS", "EPICS_PVA_NAME_SERVERS")}
+    env = dict(env, QT_QPA_PLATFORM="offscreen",
                EPICS_CA_AUTO_ADDR_LIST="NO", EPICS_CA_ADDR_LIST=f"127.0.0.1:{base}",
                EPICS_CA_SERVER_PORT=str(base), EPICS_CA_REPEATER_PORT=str(base + 1),
                EPICS_CAS_INTF_ADDR_LIST="127.0.0.1", EPICS_CAS_BEACON_ADDR_LIST=f"127.0.0.1:{base + 1}",
                EPICS_PVA_AUTO_ADDR_LIST="NO", EPICS_PVA_ADDR_LIST="127.0.0.1",
                EPICS_PVA_SERVER_PORT=str(base + 2), EPICS_PVA_BROADCAST_PORT=str(base + 3),
-               EPICS_PVAS_INTF_ADDR_LIST="127.0.0.1")
+               EPICS_PVAS_INTF_ADDR_LIST="127.0.0.1", EPICS_CAS_SERVER_PORT=str(base), EPICS_CAS_AUTO_BEACON_ADDR_LIST="NO",
+               EPICS_PVAS_SERVER_PORT=str(base + 2), EPICS_PVAS_BROADCAST_PORT=str(base + 3),
+               EPICS_PVAS_AUTO_BEACON_ADDR_LIST="NO", EPICS_PVAS_BEACON_ADDR_LIST="127.0.0.1")
     prefix = f"QtProbePerf:{os.getpid()}:"
     ioc = repeater = None
     with tempfile.TemporaryDirectory(prefix="qtprobe-cpu-") as directory:
