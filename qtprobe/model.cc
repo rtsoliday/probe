@@ -211,14 +211,24 @@ void History::append(const Snapshot& s) {
 }
 QString History::statistics() const {
   size_t n = 0;
-  double mean = 0, m2 = 0, lo = std::numeric_limits<double>::infinity(), hi = -lo;
+  double lo = std::numeric_limits<double>::infinity(), hi = -lo;
   for (const auto& s : samples) if (std::isfinite(s.number)) {
-    ++n; const double delta = s.number - mean; mean += delta / n; m2 += delta * (s.number - mean);
+    ++n;
     lo = std::min(lo, s.number); hi = std::max(hi, s.number);
   }
   if (!n) return QString("%1 events; no numeric samples").arg(samples.size());
+  // Normalize before Welford's calculation: finite opposite extremes can
+  // overflow a delta/square, and tiny finite values can underflow the variance.
+  const double scale = std::max(std::abs(lo), std::abs(hi));
+  double mean = 0, m2 = 0; size_t count = 0;
+  if (scale > 0) for (const auto& s : samples) if (std::isfinite(s.number)) {
+    const double value = s.number / scale, delta = value - mean;
+    mean += delta / ++count; m2 += delta * (value - mean);
+  }
+  const double average = std::clamp(mean, -1.0, 1.0) * scale;
+  const double deviation = std::sqrt(std::clamp(m2 / n, 0.0, 1.0)) * scale;
   return QString("%1 numeric samples    Min %2    Max %3    Mean %4    σ %5")
-      .arg(n).arg(lo, 0, 'g', 8).arg(hi, 0, 'g', 8).arg(mean, 0, 'g', 8).arg(std::sqrt(m2 / n), 0, 'g', 8);
+      .arg(n).arg(lo, 0, 'g', 8).arg(hi, 0, 'g', 8).arg(average, 0, 'g', 8).arg(deviation, 0, 'g', 8);
 }
 QString History::stateStatistics(const QStringList& choices, qint64 nowMs) const {
   QMap<int, qint64> spent; qint64 total = 0; int changes = 0, events = 0; double previous = std::numeric_limits<double>::quiet_NaN();

@@ -139,6 +139,17 @@ private slots:
     QCOMPARE(csvCell("one,\"two\""), QString("\"one,\"\"two\"\"\""));
     history.clear(); QVERIFY(history.samples.empty());
   }
+  void statisticsHandleFiniteExtremes() {
+    Snapshot s; s.connected = s.readable = s.hasValue = s.numeric = true;
+    History history(10);
+    for (double value : {1e308, -1e308}) { s.number = value; s.values = QStringList{QString::number(value, 'g', 17)}; history.append(s); }
+    const auto text = history.statistics();
+    QVERIFY2(text.contains("Mean 0"), qPrintable(text));
+    QVERIFY2(text.contains("σ 1e+308"), qPrintable(text));
+    history.clear();
+    for (double value : {1e-308, -1e-308}) { s.number = value; s.values = QStringList{QString::number(value, 'g', 17)}; history.append(s); }
+    QVERIFY2(history.statistics().contains("σ 1e-308"), qPrintable(history.statistics()));
+  }
   void historyMemoryIsBoundedAcrossPvs() {
     History::setMemoryBudget(size_t(1) << 20);
     Snapshot s; s.connected = s.readable = s.hasValue = s.numeric = true; s.seconds = 1700000000;
