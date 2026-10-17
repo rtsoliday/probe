@@ -232,6 +232,13 @@ private slots:
     process.start(exe, args); QVERIFY(process.waitForFinished(10000));
     QCOMPARE(process.exitCode(), 0);
     auto data = QJsonDocument::fromJson(process.readAllStandardOutput()); QVERIFY(data.isArray()); QCOMPARE(data.array().size(), providers().size());
+#if QTPROBE_HAVE_PVA
+    // Library diagnostics (here pvAccess debug lines) go to stderr, not into the report.
+    auto debug = env; debug.insert("EPICS_PVA_DEBUG", "3"); process.setProcessEnvironment(debug);
+    process.start(exe, {"--info", "--json", "-w", "5", "pva://" + prefix + "number"}); QVERIFY(process.waitForFinished(10000)); QCOMPARE(process.exitCode(), 0);
+    QVERIFY(QJsonDocument::fromJson(process.readAllStandardOutput()).isArray()); QVERIFY(!process.readAllStandardError().isEmpty());
+    process.setProcessEnvironment(env);
+#endif
     process.start(exe, {"--info", "--json", "-w", "0.2", prefix + "does-not-exist"}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitCode(), 1);
     QVERIFY(QJsonDocument::fromJson(process.readAllStandardOutput()).isArray());
     process.start(exe, {"--info", "--max-elements", "0", prefix + "number"}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitCode(), 2);

@@ -1,13 +1,18 @@
 #include "inspector.h"
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QTextStream>
 #include <clocale>
 #include <cmath>
+#include <cstdio>
 #include <memory>
 #include <vector>
+#ifdef Q_OS_UNIX
+#include <unistd.h>
+#endif
 using namespace probe;
 int main(int argc, char** argv) {
   bool headless = false, explicitStyle = false;
@@ -59,6 +64,16 @@ int main(int argc, char** argv) {
   catch (const std::exception& e) { QTextStream(stderr) << e.what() << '\n'; return 2; }
   if (parser.isSet("info")) {
     if (names.isEmpty() || parser.isSet("session")) { QTextStream(stderr) << "--info requires PV names and cannot open a session.\n"; return 2; }
+    // EPICS libraries print diagnostics on stdout (pvAccess uses printf).
+    // Send them to stderr so stdout carries only the report.
+    QFile report;
+#ifdef Q_OS_UNIX
+    std::fflush(stdout);
+    const int reportFd = dup(STDOUT_FILENO);
+    if (reportFd >= 0 && dup2(STDERR_FILENO, STDOUT_FILENO) >= 0) report.open(reportFd, QIODevice::WriteOnly, QFileDevice::AutoCloseHandle);
+    else if (reportFd >= 0) close(reportFd);
+#endif
+    if (!report.isOpen()) report.open(stdout, QIODevice::WriteOnly);
     std::vector<std::unique_ptr<Channel>> channels;
     QTimer deadline, ready;
     bool expired = false;
@@ -83,12 +98,12 @@ int main(int argc, char** argv) {
       }
       if (parser.isSet("json")) json.append(s.json());
       else {
-        QTextStream output(stdout); output << s.name << '\n'; const auto fields = s.information();
+        QTextStream output(&report); output << s.name << '\n'; const auto fields = s.information();
         for (auto it = fields.cbegin(); it != fields.cend(); ++it) output << "  " << it.key() << ": " << it.value() << '\n';
         output << "  Value: " << s.valueText() << "\n\n";
       }
     }
-    if (parser.isSet("json")) QTextStream(stdout) << QJsonDocument(json).toJson();
+    if (parser.isSet("json")) QTextStream(&report) << QJsonDocument(json).toJson();
     return failed ? 1 : 0;
   }
   if (!explicitStyle) QApplication::setStyle("Fusion");
