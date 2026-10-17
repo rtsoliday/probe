@@ -150,6 +150,12 @@ private slots:
       QCOMPARE(c.samples.size(), size_t(5)); QCOMPARE(c.samples.back().value.size(), History::maxValueLength);
       QVERIFY(c.samples.back().value.endsWith(QChar(0x2026)));
     }
+    {
+      // Single-event histories (Record fields, --info) do not reduce a PV's share.
+      std::vector<std::unique_ptr<History>> fields; for (int i = 0; i < 40; ++i) fields.push_back(std::make_unique<History>(1));
+      History a(1000000); for (int i = 0; i < 100000; ++i) a.append(s);
+      QVERIFY(a.bytes() > (size_t(1) << 19)); QVERIFY(History::totalBytes() <= (size_t(1) << 20));
+    }
     QCOMPARE(History::totalBytes(), size_t(0));
     History::setMemoryBudget(size_t(256) << 20);
     writeLog().clear(); logWrite({QDateTime::currentDateTime(), "ca://A", QString(5000, 'b'), QString(5000, 'a'), "ok", true});

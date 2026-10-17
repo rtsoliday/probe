@@ -176,8 +176,9 @@ QString bounded(QString text) {
 // An estimate: the sample, its string data and deque/allocator overhead.
 size_t sampleBytes(const Sample& s) { return sizeof(Sample) + 48 + size_t(s.value.capacity()) * sizeof(QChar); }
 } // namespace
-History::History(size_t capacity) : capacity_(capacity) { ++historyCount; }
-History::~History() { clear(); --historyCount; }
+// Single-event histories (Record fields, --info) take no share of the budget.
+History::History(size_t capacity) : capacity_(capacity) { if (capacity_ > 1) ++historyCount; }
+History::~History() { clear(); if (capacity_ > 1) --historyCount; }
 size_t History::totalBytes() { return historyBytes; }
 void History::setMemoryBudget(size_t bytes) { historyBudget = std::max<size_t>(bytes, 1 << 20); }
 void History::popFront() { bytes_ -= sampleBytes(samples.front()); historyBytes -= sampleBytes(samples.front()); samples.pop_front(); }
