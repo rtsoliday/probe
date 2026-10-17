@@ -84,6 +84,9 @@ void Channel::writeValues(const QStringList& values) {
   if (readOnly_ || !snapshot.connected || !snapshot.writable || !connection || writePending_ || writeUncertain_ || values.isEmpty()) {
     emit writeFinished(false, "Write unavailable: read-only, disconnected, denied, pending or uncertain completion."); return;
   }
+  for (const auto& value : values) if (value.contains(QChar(0))) {
+    emit writeFinished(false, "Text elements cannot contain embedded NUL characters."); return;
+  }
   writePending_ = true;
   writeDeadline.start(10000);
   try { connection->write(values); }

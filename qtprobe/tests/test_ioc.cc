@@ -118,6 +118,19 @@ private slots:
       QTRY_VERIFY(capped.snapshot.hasValue); QCOMPARE(capped.snapshot.values.size(), 2); QVERIFY(capped.snapshot.truncated);
     }
   }
+  void embeddedNulWritesAreRejected() {
+    for (const auto& provider : providers()) {
+      Channel text({prefix + "text", provider}); text.start();
+      QTRY_VERIFY_WITH_TIMEOUT(text.snapshot.hasValue && text.snapshot.writable, 10000);
+      const auto before = text.snapshot.values;
+      QSignalSpy done(&text, &Channel::writeFinished);
+      text.write(QString("changed") + QChar(0) + "tail");
+      QTRY_COMPARE(done.size(), 1); QVERIFY(!done[0][0].toBool());
+      text.writeValues({QString("changed") + QChar(0) + "tail"});
+      QTRY_COMPARE(done.size(), 2); QVERIFY(!done[1][0].toBool());
+      QTest::qWait(150); QCOMPARE(text.snapshot.values, before);
+    }
+  }
   void precisionLimitsLongStringsAndProcess() {
     for (const auto& provider : providers()) {
       Channel c({prefix + "number", provider}); c.start();

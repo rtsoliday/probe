@@ -256,7 +256,8 @@ use the native value editor for those values. Hexadecimal
 integers can use `0x`. Floating-point writes must be finite. Enum writes accept
 a label or a valid index; when a label reads as a number, typed text selects
 that label. The state list and **Readback** stage text that selects the chosen
-state. CA strings hold at most 39 encoded bytes. Array writes
+state. CA strings hold at most 39 encoded bytes. Text writes and string-array
+elements reject embedded NUL characters; use numeric byte arrays for binary data. Array writes
 use JSON: `[1, 2, 3]` or `["one", "two"]`. Quote integers above 2^53−1, for
 example `["18446744073709551615"]`, to avoid JSON numeric precision loss.
 Array writes replace the value array; empty array writes are not supported.

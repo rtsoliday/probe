@@ -276,6 +276,9 @@ QByteArray History::csv() const {
 }
 QStringList parseWrite(const Snapshot& s, const QString& text, QString* error) {
   error->clear();
+  if (text.contains(QChar(0))) {
+    *error = "Embedded NUL characters cannot be written as text; use a numeric byte array for binary data."; return {};
+  }
   // U+FFFD stands for bytes that were not UTF-8; writing it would replace them.
   if (text.contains(QChar::ReplacementCharacter)) {
     *error = "The text holds bytes that are not UTF-8 (shown as \uFFFD); it cannot be written back exactly."; return {};
@@ -300,7 +303,10 @@ QStringList parseWrite(const Snapshot& s, const QString& text, QString* error) {
       *error = "Array writes require a JSON array; quote 64-bit integers to preserve precision."; return {};
     }
     for (const auto& v : doc.array()) {
-      if (v.isString()) values << v.toString();
+      if (v.isString()) {
+        if (v.toString().contains(QChar(0))) { *error = "Array text elements cannot contain embedded NUL characters."; return {}; }
+        values << v.toString();
+      }
       else if (v.isDouble()) {
         const double number = v.toDouble();
         if (std::abs(number) > 9007199254740991.0 && std::trunc(number) == number) {

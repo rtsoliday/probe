@@ -118,6 +118,14 @@ private slots:
     parseWrite(s, "[null]", &error); QVERIFY(!error.isEmpty());
     parseWrite(s, "1,2", &error); QVERIFY(!error.isEmpty());
   }
+  void embeddedNulWriteParsing() {
+    Snapshot s; QString error;
+    parseWrite(s, QString("one") + QChar(0) + "two", &error); QVERIFY(!error.isEmpty());
+    s.array = true;
+    parseWrite(s, "[\"one\\u0000two\"]", &error); QVERIFY(!error.isEmpty());
+    s.longString = true;
+    parseWrite(s, QString("one") + QChar(0) + "two", &error); QVERIFY(!error.isEmpty());
+  }
   void boundedHistoryAndStatistics() {
     History history(3); Snapshot s; s.connected = s.readable = s.hasValue = s.numeric = true;
     for (int i = 1; i <= 4; ++i) { s.number = i; s.values = QStringList{QString::number(i)}; history.append(s); }
