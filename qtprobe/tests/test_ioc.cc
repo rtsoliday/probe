@@ -460,6 +460,30 @@ private slots:
       wide.write(text); ++n; QTRY_COMPARE(wrote.size(), n); QVERIFY2(wrote.back()[0].toBool(), qPrintable(text)); QTRY_COMPARE(wide.snapshot.number, expected);
     }
   }
+  void caInt64RejectsHugeValues() {
+    Channel integer({prefix + "int64", "ca"}); integer.start();
+    Channel wide({prefix + "wide", "ca"}); wide.start();
+    QTRY_VERIFY_WITH_TIMEOUT(integer.snapshot.hasValue && integer.snapshot.writable && wide.snapshot.hasValue && wide.snapshot.writable, 10000);
+    QSignalSpy integerWrites(&integer, &Channel::writeFinished), wideWrites(&wide, &Channel::writeFinished);
+    integer.write("5"); QTRY_COMPARE(integerWrites.size(), 1); QTRY_COMPARE(integer.snapshot.number, 5.0);
+    int count = 1;
+    for (const auto& text : {"1e38", "-1e38", "1e100", "-1e100", "1.7976931348623157e308"}) {
+      ++count; integer.write(text); QTRY_COMPARE(integerWrites.size(), count);
+      QTest::qWait(100);
+      QVERIFY2(!integerWrites.back()[0].toBool(), qPrintable(QString("%1 was accepted; readback %2").arg(text, integer.snapshot.values.value(0))));
+      QCOMPARE(integer.snapshot.number, 5.0);
+      wide.write(text); QTRY_COMPARE(wideWrites.size(), count - 1);
+      QVERIFY2(wideWrites.back()[0].toBool(), text); QTRY_COMPARE(wide.snapshot.number, QString(text).toDouble());
+    }
+    // A huge element must not disable checked conversion for its array peers.
+    Channel array({prefix + "array", "ca"}); array.start();
+    QTRY_VERIFY_WITH_TIMEOUT(array.snapshot.hasValue && array.snapshot.writable, 10000);
+    QSignalSpy arrayWrites(&array, &Channel::writeFinished);
+    array.write("[\"1e100\", \"-1e100\", \"9223372036854775806\", \"0.125\"]");
+    QTRY_COMPARE(arrayWrites.size(), 1); QVERIFY(arrayWrites[0][0].toBool());
+    QTRY_COMPARE(array.snapshot.count, quint64(4));
+    QCOMPARE(array.snapshot.values, (QStringList{"1e+100", "-1e+100", "9.2233720368547758e+18", "0.125"}));
+  }
   void slowRecordWriteCompletes() {
     // A put-callback still processing after 10 s on a connected PV keeps waiting and then reports its real result.
     Options options; Inspector slow(Address::parse(prefix + "slower.A"), options); slow.show(); auto* channel = slow.channel();

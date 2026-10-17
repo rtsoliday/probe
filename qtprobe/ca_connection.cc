@@ -254,16 +254,15 @@ public:
       }
       check(ca_array_put_callback(DBR_STRING, count, id, data.data(), written, this));
     } else if (native == DBF_DOUBLE || native == DBF_FLOAT) {
-      std::vector<double> data; bool beyondExact = false, huge = false;
+      std::vector<double> data; bool beyondExact = false;
       for (const auto& value : values) {
         bool ok; double number = value.toDouble(&ok);
         if (!ok || !std::isfinite(number) || (native == DBF_FLOAT && std::abs(number) > std::numeric_limits<float>::max()))
           throw std::runtime_error("Invalid or out-of-range floating-point value");
         beyondExact = beyondExact || (native == DBF_DOUBLE && std::abs(number) >= 9007199254740992.0);
-        huge = huge || std::abs(number) >= 1e38;
         data.push_back(number);
       }
-      if (beyondExact && !huge) {
+      if (beyondExact) {
         // CA serves 64-bit integer fields as DBF_DOUBLE, which cannot hold every
         // integer beyond 2^53 and overflows at 2^63. Send integer text instead:
         // the IOC parses it for the field's own type, exactly or with an overflow
@@ -272,7 +271,20 @@ public:
         std::vector<std::array<char, MAX_STRING_SIZE>> text;
         for (int i = 0; i < values.size(); ++i) {
           const auto trimmed = values[i].trimmed(); const double number = data[size_t(i)];
-          const auto bytes = (integer.match(trimmed).hasMatch() ? trimmed : std::trunc(number) == number ? QString::number(number, 'f', 0) : QString::number(number, 'g', 17)).toLatin1();
+          QString encoded;
+          if (integer.match(trimmed).hasMatch()) encoded = trimmed;
+          else if (std::abs(number) >= 1e38) {
+            // IOC integer parsers accept a numeric prefix and ignore an
+            // exponent, so "1e100" would silently write 1 to an int64 field.
+            // Keep 21 digits before the exponent: the prefix overflows both
+            // int64 and uint64, while a double parser gets the same value.
+            const auto scientific = QString::number(std::abs(number), 'e', 16);
+            const auto e = scientific.indexOf('e');
+            const auto digits = scientific.left(e).remove('.').leftJustified(21, '0');
+            encoded = (number < 0 ? "-" : "") + digits + 'e' + QString::number(scientific.mid(e + 1).toInt() - 20);
+          } else encoded = std::trunc(number) == number ? QString::number(number, 'f', 0) : QString::number(number, 'g', 17);
+          const auto bytes = encoded.toLatin1();
+          if (bytes.size() >= MAX_STRING_SIZE) throw std::runtime_error("Numeric text exceeds the CA string size");
           std::array<char, MAX_STRING_SIZE> item{}; std::memcpy(item.data(), bytes.constData(), size_t(bytes.size())); text.push_back(item);
         }
         check(ca_array_put_callback(DBR_STRING, count, id, text.data(), written, this));
