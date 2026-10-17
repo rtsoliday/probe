@@ -106,6 +106,8 @@ private:
   QString undoValue, pendingBefore, pendingAfter;
   QStringList undoValues, pendingBeforeValues, undoChoices, pendingChoices;
   QString undoType, pendingType;
+  bool undoArray = false, pendingArray = false;
+  quint64 undoCapacity = 0, pendingCapacity = 0;
   QPoint dragStart;
   bool hasUndo = false, pendingLog = false, pendingProcess = false;
   // Whether a byte array was shown as text when the editor's value was entered.
@@ -113,6 +115,7 @@ private:
   QString undoUnavailable, pendingUndoProblem;
   // Asks (when confirming, with the values to send) and records the write for the log and Undo.
   bool beginWrite(const QStringList& sent, const QString& after, bool ask);
+  bool undoCompatible(const Snapshot&) const;
   QScrollArea* scroll;
   QWidget *body, *writeArea;
   ElidedLabel *heading, *description, *value, *writeStatus;

@@ -488,6 +488,7 @@ Inspector::Inspector(Address address, Options options, QWidget* parent) : QWidge
       logWrite({QDateTime::currentDateTime(), s.provider + "://" + s.name, pendingBefore, pendingAfter, message, ok});
       if (ok && !pendingProcess) {
         undoValue = pendingBefore; undoValues = pendingBeforeValues; undoType = pendingType; undoChoices = pendingChoices;
+        undoArray = pendingArray; undoCapacity = pendingCapacity;
         hasUndo = pendingUndoProblem.isEmpty(); undoUnavailable = pendingUndoProblem;
       } else if (channel_->writeUncertain()) {
         // The PV may hold the new value; an older Undo would not restore what this write replaced.
@@ -540,7 +541,13 @@ void Inspector::requestUndo() {
   // The saved elements bypass text parsing, which depends on the PV's current
   // contents (enum labels, text in byte arrays).
   const auto& s = channel_->snapshot;
-  if (hasUndo && s.type == undoType && s.choices == undoChoices && beginWrite(undoValues, undoValue, true)) channel_->writeValues(undoValues);
+  if (hasUndo && undoCompatible(s) && beginWrite(undoValues, undoValue, true)) channel_->writeValues(undoValues);
+}
+bool Inspector::undoCompatible(const Snapshot& s) const {
+  // CA uses the same native type for scalars and arrays. Its advertised
+  // capacity is authoritative; PVA's received buffer capacity is not.
+  return s.type == undoType && s.choices == undoChoices && s.array == undoArray &&
+      (s.provider != "ca" || s.capacity == undoCapacity);
 }
 bool Inspector::beginWrite(const QStringList& sent, const QString& after, bool ask) {
   const auto& s = channel_->snapshot;
@@ -564,6 +571,7 @@ bool Inspector::beginWrite(const QStringList& sent, const QString& after, bool a
   // Undo restores these exact elements; a truncated readback, or text decoded
   // from bytes that were not UTF-8, cannot be restored.
   pendingBeforeValues = s.values; pendingType = s.type; pendingChoices = s.choices;
+  pendingArray = s.array; pendingCapacity = s.capacity;
   pendingUndoProblem = !s.hasValue || s.values.isEmpty() ? "Undo unavailable: there was no earlier value" :
       s.truncated ? "Undo unavailable: the readback before your last write was truncated" :
       s.values.join(QString()).contains(QChar::ReplacementCharacter) ? "Undo unavailable: the earlier value holds bytes that are not UTF-8" : QString();
@@ -634,9 +642,9 @@ void Inspector::refreshWriteControls() {
   const bool ready = writable && !channel_->writePending() && !channel_->writeUncertain();
   put->setEnabled(ready); input->setEnabled(writable); enumChoice->setEnabled(writable);
   // A PV that came back with another type or state list (an IOC reboot) cannot take the saved elements.
-  const bool undoFits = !s.hasValue || (s.type == undoType && s.choices == undoChoices);
+  const bool undoFits = !s.hasValue || undoCompatible(s);
   undo->setEnabled(ready && hasUndo && undoFits);
-  undo->setToolTip(hasUndo && !undoFits ? "Undo unavailable: the PV's type or states changed since your last write" :
+  undo->setToolTip(hasUndo && !undoFits ? "Undo unavailable: the PV's type, states or array capacity changed since your last write" :
       hasUndo ? "Restore " + preview(undoValue) + ", the value before your last write" :
       !undoUnavailable.isEmpty() ? undoUnavailable : "No write to undo yet");
   processButton->setVisible(!channel_->readOnly() && s.processable);

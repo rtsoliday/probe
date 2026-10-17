@@ -648,6 +648,25 @@ private slots:
       QVERIFY(inspector.findChild<QLabel*>("writeStatus")->text().contains("changed"));
     }
   }
+  void undoRejectsArrayShapeChange() {
+    for (const bool array : {false, true}) {
+      Options options; Inspector inspector(Address::parse(prefix + (array ? "array" : "number")), options); inspector.show();
+      auto* channel = inspector.channel();
+      QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.hasValue && channel->snapshot.writable, 10000);
+      QSignalSpy done(channel, &Channel::writeFinished);
+      if (array) { channel->write("[1, 2, 3, 4, 5, 6, 7, 8]"); QTRY_COMPARE(done.size(), 1); QTRY_COMPARE(channel->snapshot.values.size(), 8); }
+      inspector.requestWrite(array ? "[9]" : "20"); QTRY_COMPARE(done.size(), array ? 2 : 1);
+      auto* undo = inspector.findChild<QPushButton*>("undoWriteButton"); QTRY_VERIFY(undo->isEnabled());
+      const auto type = channel->snapshot.type;
+      ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch(QFINDTESTDATA("fixture-retyped.db"));
+      QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.connected && channel->snapshot.hasValue && channel->snapshot.writable && channel->snapshot.array && channel->snapshot.capacity == (array ? 4u : 8u), 20000);
+      QCOMPARE(channel->snapshot.type, type); // Native CA type alone cannot guard Undo.
+      inspector.refresh(); const bool disabled = !undo->isEnabled();
+      inspector.requestUndo(); QTest::qWait(200); const bool refused = done.size() == (array ? 2 : 1);
+      ioc.terminate(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
+      QVERIFY(disabled); QVERIFY(refused);
+    }
+  }
   void cleanupTestCase() {
     ioc.terminate(); if (!ioc.waitForFinished(3000)) { ioc.kill(); ioc.waitForFinished(); } saveLog();
     repeater.terminate(); if (!repeater.waitForFinished(3000)) { repeater.kill(); repeater.waitForFinished(); }
