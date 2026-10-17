@@ -1042,7 +1042,8 @@ void Window::openInStripTool(const QList<Channel*>& channels) {
   catch (const std::exception& e) { statusBar()->showMessage(QString::fromLocal8Bit(e.what()), 10000); return; }
   // Keep only the newest configurations; each launch writes a new one.
   const auto old = QDir(folder).entryInfoList({"qtprobe-*.stp"}, QDir::Files, QDir::Time);
-  for (int i = 20; i < old.size(); ++i) QFile::remove(old[i].filePath());
+  // Never the one just written, whatever other files' times say.
+  for (int i = 20; i < old.size(); ++i) if (old[i].absoluteFilePath() != QFileInfo(path).absoluteFilePath()) QFile::remove(old[i].filePath());
   if (!QProcess::startDetached(program, {path}, folder)) { statusBar()->showMessage("Could not start " + program, 10000); return; }
   statusBar()->showMessage(QString("Opened %1 PV%2 in QtStripTool%3").arg(snapshots.size()).arg(snapshots.size() == 1 ? "" : "s")
       .arg(skipped ? QString(" · skipped %1 (PVA, over ten, or long names)").arg(skipped) : QString()), 8000);

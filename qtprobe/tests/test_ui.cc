@@ -563,6 +563,12 @@ private slots:
     const QString folder = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/striptool";
     for (int i = 0; i < 24; ++i) { window.openInStripTool({channels[0]}); QTest::qWait(2); }
     QVERIFY(QDir(folder).entryList({"qtprobe-*.stp"}, QDir::Files).size() <= 20);
+    // Files with later times (clock skew) never displace the configuration just written.
+    for (int i = 0; i < 25; ++i) {
+      QFile future(folder + QString("/qtprobe-future-%1.stp").arg(i)); QVERIFY(future.open(QIODevice::WriteOnly)); future.write("x"); future.flush();
+      QVERIFY(future.setFileTime(QDateTime::currentDateTime().addDays(1), QFileDevice::FileModificationTime));
+    }
+    QFile::remove(record); window.openInStripTool({channels[0]}); QTRY_VERIFY(QFile::exists(record));
     qunsetenv("QTPROBE_STRIPTOOL");
   }
   void modernWorkspaceVisualsAndAppearance() {
