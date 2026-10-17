@@ -122,10 +122,17 @@ updating at 10 Hz with 10,000 retained events each, and one inspector with a
 full history, with no section and with Trend open. The helper reports JSON
 containing process CPU time as a percentage of one core, elapsed time, and
 delivered update counts. Its options also select History or a hidden window. The
-Python runner needs Linux, Python 3 and `softIocPVA`; it owns a loopback-only
+Python runner needs Python 3 and `softIocPVA`; it owns a loopback-only
 IOC and foreground CA repeater and checks 1/100 static CA PVs, 100 active CA
 PVs, and 100 static/active PVA PVs. Set `EPICS_TEST_BIN` for another EPICS
 installation. No PV writes are issued by the benchmark client. Correctness tests
 additionally cover deferred rendering, idle timers, scrolling into stale table
 rows, incremental history rows, peak/gap preservation in dense plots, and shared
 CA/PVA delivery after peer removal.
+
+The benchmarks also support native Windows builds from an initialized MSVC
+shell (use the same Make variables and runtime paths as the normal build).
+Select `O.Windows-x86_64-qt6/benchmark_cpu.exe` for the Python runner and set
+`EPICS_TEST_BIN` to the EPICS `bin/windows-x64` directory. On Windows the helper
+uses process kernel/user CPU time and peak working set; on Unix it uses process
+CPU time and peak RSS. Both report CPU as a percentage of one core.

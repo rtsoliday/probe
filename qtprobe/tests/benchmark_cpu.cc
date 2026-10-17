@@ -7,9 +7,43 @@
 #include <QTemporaryDir>
 #include <cmath>
 #include <ctime>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <psapi.h>
+#else
 #include <sys/resource.h>
+#endif
 #include <vector>
 using namespace probe;
+// MSVC's clock() measures elapsed time, not process CPU time. Include all
+// threads on both platforms so idle Windows clients do not appear 100% busy.
+double processCpuMs() {
+#ifdef Q_OS_WIN
+  FILETIME created{}, exited{}, kernel{}, user{};
+  if (!GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user))
+    qFatal("Cannot read process CPU time");
+  auto ticks = [](FILETIME time) { return (quint64(time.dwHighDateTime) << 32) | time.dwLowDateTime; };
+  return double(ticks(kernel) + ticks(user)) / 10000.0;
+#else
+  return 1000.0 * std::clock() / CLOCKS_PER_SEC;
+#endif
+}
+double maxRssMb() {
+#ifdef Q_OS_WIN
+  PROCESS_MEMORY_COUNTERS memory{};
+  if (!GetProcessMemoryInfo(GetCurrentProcess(), &memory, sizeof memory))
+    qFatal("Cannot read peak process memory");
+  return memory.PeakWorkingSetSize / 1048576.0;
+#else
+  rusage usage{};
+  if (getrusage(RUSAGE_SELF, &usage)) qFatal("Cannot read peak process memory");
+#ifdef Q_OS_MACOS
+  return usage.ru_maxrss / 1048576.0; // Darwin reports bytes; Linux reports KiB.
+#else
+  return usage.ru_maxrss / 1024.0;
+#endif
+#endif
+}
 class MeasuredApplication : public QApplication {
 public:
   using QApplication::QApplication;
@@ -18,8 +52,8 @@ public:
   bool notify(QObject* receiver, QEvent* event) override {
     if (!profile || (event->type() != QEvent::Paint && event->type() != QEvent::Timer && event->type() != QEvent::LayoutRequest && event->type() != QEvent::UpdateRequest)) return QApplication::notify(receiver, event);
     const auto key = QString::number(int(event->type())) + ':' + receiver->metaObject()->className() + ':' + receiver->objectName();
-    const auto start = std::clock(); const bool result = QApplication::notify(receiver, event);
-    eventCpu[key] += 1000.0 * (std::clock() - start) / CLOCKS_PER_SEC; return result;
+    const auto start = processCpuMs(); const bool result = QApplication::notify(receiver, event);
+    eventCpu[key] += processCpuMs() - start; return result;
   }
 };
 int main(int argc, char** argv) {
@@ -78,21 +112,14 @@ int main(int argc, char** argv) {
   QTimer source; source.setTimerType(Qt::PreciseTimer);
   if (provider == "synthetic" && period) { QObject::connect(&source, &QTimer::timeout, &app, update); source.start(period); }
   app.profile = parser.isSet("profile-events");
-  const auto beforeCpu = std::clock(); QElapsedTimer elapsed; elapsed.start();
+  const auto beforeCpu = processCpuMs(); QElapsedTimer elapsed; elapsed.start();
   QEventLoop measurement; QTimer::singleShot(duration, &measurement, &QEventLoop::quit); measurement.exec();
-  const auto cpuMs = 1000.0 * (std::clock() - beforeCpu) / CLOCKS_PER_SEC; const auto wallMs = elapsed.elapsed();
+  const auto cpuMs = processCpuMs() - beforeCpu; const auto wallMs = elapsed.elapsed();
   quint64 afterSequence = 0; for (auto* c : channels) afterSequence += c->snapshot.sequence;
   QJsonObject result{{"provider", provider}, {"pvs", count}, {"view", view}, {"history_preload", preload},
       {"wall_ms", wallMs}, {"cpu_ms", cpuMs}, {"cpu_percent_one_core", 100 * cpuMs / wallMs},
       {"delivered_updates", double(afterSequence - beforeSequence)}, {"qt_platform", QApplication::platformName()},
-      {"history_mb", History::totalBytes() / 1048576.0}, {"max_rss_mb", [] {
-        rusage u{}; getrusage(RUSAGE_SELF, &u);
-#ifdef Q_OS_MACOS
-        return u.ru_maxrss / 1048576.0; // Darwin reports bytes; Linux reports KiB.
-#else
-        return u.ru_maxrss / 1024.0;
-#endif
-      }()}};
+      {"history_mb", History::totalBytes() / 1048576.0}, {"max_rss_mb", maxRssMb()}};
   app.profile = false;
   if (parser.isSet("profile-events")) { QJsonObject events; for (auto it = app.eventCpu.cbegin(); it != app.eventCpu.cend(); ++it) events[it.key()] = it.value(); result["inclusive_event_cpu_ms"] = events; }
   QTextStream(stdout) << QJsonDocument(result).toJson(QJsonDocument::Compact) << '\n';

@@ -91,7 +91,7 @@ test-ui: $(OBJ_DIR)/test_ui$(EXEEXT) $(OBJ_DIR)/striptool_recorder$(EXEEXT)
 $(OBJ_DIR)/benchmark_cpu.$(OBJEXT): tests/benchmark_cpu.cc $(HEADERS) | $(OBJ_DIR)
 	$(call compile,)
 $(OBJ_DIR)/benchmark_cpu$(EXEEXT): $(OBJ_DIR)/benchmark_cpu.$(OBJEXT) $(OBJECTS)
-	$(call link,)
+	$(call link,$(if $(filter Windows,$(OS)),Psapi.lib))
 benchmark-cpu: $(OBJ_DIR)/benchmark_cpu$(EXEEXT)
 	QT_QPA_PLATFORM=offscreen $< --pvs 0 --period 0
 	QT_QPA_PLATFORM=offscreen $< --pvs 100 --period 0
