@@ -124,7 +124,8 @@ class Ca final : public Connection {
     s.status = v.status; s.severity = v.severity;
     s.seconds = qint64(v.stamp.secPastEpoch) + POSIX_TIME_AT_EPICS_EPOCH;
     s.nanoseconds = int(v.stamp.nsec);
-    s.alarmMessage = v.status < ALARM_NSTATUS ? epicsAlarmConditionStrings[v.status] : "Unknown";
+    // STAT comes from the server; a negative short must not index the table.
+    s.alarmMessage = v.status >= 0 && v.status < ALARM_NSTATUS ? epicsAlarmConditionStrings[v.status] : "Unknown";
     const auto values = &v.value;
     for (long i = 0; i < count; ++i) {
       if constexpr (std::is_array_v<std::remove_reference_t<decltype(v.value)>>) {
