@@ -563,8 +563,9 @@ arrays keep the numeric view. PVA unions and
 structure arrays can be browsed in Structure but are not editable. PVA writes do not request
 record processing beyond the server's normal put behavior.
 
-Linux Qt 5 was the initial acceptance baseline. The README records subsequent
-native Windows validation with MSVC and Qt 6.11.2, including CA and PVA. Consult
-the current release audit for the exact platforms and build variants tested;
-results apply to those configurations. Production IOC interoperability requires
+Validated for 0.1.0: Linux x86_64 with GCC 11, Qt 5.15 and EPICS Base 7.0.8
+(CA+PVA and CA-only builds, full test suite); native Windows x64 with MSVC and
+Qt 6.11.2, including CA and PVA. macOS with Qt 6 builds without warnings, but
+no test results are recorded for it. Other combinations are expected to work
+but were not validated. Production IOC and CA gateway interoperability requires
 site validation. No production PV writes are part of the test suite.
