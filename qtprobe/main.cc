@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QSet>
 #include <QTextStream>
 #include <clocale>
 #include <cmath>
@@ -21,9 +22,19 @@ int main(int argc, char** argv) {
   // Qt reserves -session for X11 session management and removes it with its
   // value, so take QtProbe's --session file before Qt sees the arguments.
   QString sessionFile;
+  const QSet<QByteArray> valueOptions{
+      "provider", "w", "timeout", "max-elements", "history", "history-memory",
+      "style", "stylesheet", "platform", "platformpluginpath", "platformtheme",
+      "plugin", "qwindowgeometry", "qwindowicon", "qwindowtitle", "display",
+      "geometry", "title", "icon", "font", "name", "visual", "qmljsdebugger"};
+  bool positional = false;
   std::vector<char*> args{argv[0]};
   for (int i = 1; i < argc; ++i) {
     const auto arg = QByteArray(argv[i]);
+    // After -- every token is a PV name, including --info and --session.
+    // Reinterpreting one here can select QCoreApplication for a GUI launch.
+    if (arg == "--") positional = true;
+    if (positional) { args.push_back(argv[i]); continue; }
     if ((arg == "--session" || arg == "-session") && i + 1 < argc) { hasSession = true; sessionFile = QString::fromLocal8Bit(argv[++i]); continue; }
     if (arg.startsWith("--session=") || arg.startsWith("-session=")) { hasSession = true; sessionFile = QString::fromLocal8Bit(arg.mid(arg.indexOf('=') + 1)); continue; }
     if (arg == "-style" || arg.startsWith("-style=")) explicitStyle = true;
@@ -31,6 +42,9 @@ int main(int argc, char** argv) {
     if (arg == "--info" || arg == "-info" || arg == "--json" || arg == "-json" || arg == "--help" || arg == "-help" || arg == "--help-all" || arg == "-help-all" ||
         arg == "-h" || arg == "-?" || arg == "--version" || arg == "-version" || arg == "-v") headless = true;
     args.push_back(argv[i]);
+    // Option values are literal data even when they look like another option.
+    const auto name = arg.startsWith("--") ? arg.mid(2) : arg.startsWith('-') ? arg.mid(1) : QByteArray();
+    if (valueOptions.contains(name) && i + 1 < argc) args.push_back(argv[++i]);
   }
   int count = int(args.size()); args.push_back(nullptr);
   std::unique_ptr<QCoreApplication> app;

@@ -301,6 +301,22 @@ private slots:
 #endif
     process.start(exe, {"--info", "--json", "-w", "0.2", prefix + "does-not-exist"}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitCode(), 1);
     QVERIFY(QJsonDocument::fromJson(process.readAllStandardOutput()).isArray());
+    // The option terminator makes even option-looking tokens literal PV names.
+    // In particular, these must not be removed as a session to load.
+    for (const auto& literal : {QString("--session=VALUE"), QString("--session"), QString("--info"), QString("--version")}) {
+      process.start(exe, {"--info", "--json", "-w", "0.1", "--", literal}); QVERIFY(process.waitForFinished(5000));
+      QCOMPARE(process.exitStatus(), QProcess::NormalExit); QCOMPARE(process.exitCode(), 1);
+      const auto literalReport = QJsonDocument::fromJson(process.readAllStandardOutput());
+      QVERIFY(literalReport.isArray()); QCOMPARE(literalReport.array().size(), 1);
+      QCOMPARE(literalReport.array()[0].toObject()["pv"].toString(), literal);
+    }
+    // A session-looking token consumed as another option's value must survive
+    // pre-scanning. Help exits before validating that literal value.
+    for (const auto& option : {QString("--provider"), QString("--timeout"), QString("--max-elements"), QString("--history"), QString("--history-memory")}) {
+      process.start(exe, {"--help", option, "--session=VALUE"}); QVERIFY(process.waitForFinished(5000));
+      QCOMPARE(process.exitStatus(), QProcess::NormalExit); QCOMPARE(process.exitCode(), 0);
+      QVERIFY(process.readAllStandardOutput().contains("Usage:"));
+    }
     process.start(exe, {"--info", "--max-elements", "0", prefix + "number"}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitCode(), 2);
     // QtProbe reads --session itself; Qt reserves -session for session management.
     QTemporaryDir sessions; QFile bad(sessions.filePath("bad.qtp")); QVERIFY(bad.open(QIODevice::WriteOnly)); bad.write(R"({"version":1,"pvs":["bad name"]})"); bad.close();
