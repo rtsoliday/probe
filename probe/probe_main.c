@@ -38,7 +38,12 @@
 #define PROBE_ALLOCATE_STORAGE
 #include "probe.h"
 
-extern Widget createAndPopupProductDescriptionShell();
+extern Widget createAndPopupProductDescriptionShell(
+  XtAppContext appContext, Widget topLevelShell,
+  char *name, XmFontList nameFontList, Pixmap namePixmap,
+  char *description, XmFontList descriptionFontList,
+  char *versionInfo, char *developedAt, XmFontList otherFontList,
+  int background, int foreground, int seconds);
 
 /* Function prototypes */
 
@@ -346,7 +351,7 @@ int main(int argc, char *argv[])
     {
 	productDescriptionShell =    
 	  createAndPopupProductDescriptionShell(app,toplevel,
-	    "Probe", fontList, NULL,
+	    "Probe", fontList, None,
 	    "Probe - A channel Access Utility",NULL,
 	    versionString,
 	    "Developed at Argonne National Laboratory\n"

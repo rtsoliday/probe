@@ -39,9 +39,9 @@
 int ii,is,ip,ia,ig;
 
 void setDefaultUnits();
-void makeInfoFormatStr();
-void makeHistFormatStr();
-void makeDataFormatStr();
+void makeInfoFormatStr(atom *channel);
+void makeHistFormatStr(atom *channel);
+void makeDataFormatStr(atom *channel);
 
 /* Data structure for dials */
 

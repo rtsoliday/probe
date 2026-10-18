@@ -39,8 +39,6 @@ extern XFontStruct *font;
 extern XmFontList fontList1;
 extern XFontStruct *font1;
 
-void updateLabelDisplay();
-void updateTextDisplay();
 void adjustOptionCallback();
 
 

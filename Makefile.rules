@@ -97,6 +97,24 @@ MOTIF_LIB ?= $(patsubst %/,%,$(dir $(firstword $(wildcard $(addsuffix /libXm.*,$
 X11_LIB ?= $(patsubst %/,%,$(dir $(firstword $(wildcard $(addsuffix /libX11.*,$(GUI_LIB_DIRS))))))
 HAVE_MOTIF := $(if $(and $(MOTIF_INC),$(MOTIF_LIB),$(X11_INC),$(X11_LIB)),1)
 
+# A static Motif archive needs its X11, font and image dependencies explicitly,
+# as in MEDM and StripTool. Prefer libraries from the same installation as Xm.
+XM_LIB := $(firstword $(wildcard $(MOTIF_LIB)/libXm.$(EPICS_SHARED_EXT) $(MOTIF_LIB)/libXm.a))
+MOTIF_DEP_LIB_DIRS = $(MOTIF_LIB) $(X11_LIB) $(GUI_LIB_DIRS)
+find_motif_dependency = $(firstword $(foreach dir,$(MOTIF_DEP_LIB_DIRS),$(wildcard $(dir)/lib$(1).$(EPICS_SHARED_EXT) $(dir)/lib$(1).a)))
+MOTIF_STATIC_DEP_LIBS =
+MOTIF_STATIC_EXTRA_LIBS =
+ifneq ($(filter %.a,$(XM_LIB)),)
+MOTIF_STATIC_DEP_LIBS := $(foreach lib,Xrandr Xrender Xcursor Xpm Xext Xfixes,$(call find_motif_dependency,$(lib)))
+MOTIF_STATIC_EXTRA_LIBS := $(foreach lib,Xft fontconfig jpeg png iconv z,$(call find_motif_dependency,$(lib)))
+# The preserved legacy Makefile exposes EPICS_SYS_LIBS before -lXm -lXt -lX11.
+# Darwin resolves archives regardless of order; elsewhere put Xm before its
+# dependencies too. Keep these libraries out of the QtProbe link command.
+ifeq ($(abspath $(CURDIR)),$(abspath $(RULES_DIR)probe))
+EPICS_SYS_LIBS += $(if $(filter Darwin,$(OS)),,$(XM_LIB)) $(MOTIF_STATIC_DEP_LIBS) $(MOTIF_STATIC_EXTRA_LIBS) $(call find_motif_dependency,Xmu)
+endif
+endif
+
 ifeq ($(OS),Windows)
 BIN_DIR := ../bin/Windows-$(ARCH)
 HAVE_MOTIF :=

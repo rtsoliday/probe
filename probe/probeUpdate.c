@@ -120,7 +120,7 @@ void updateDataDisplay(atom *channel,unsigned int i)
 #if 1
 	    winPrintf(channel->d[i].w,"%hu %s",
 	      (unsigned char)channel->data.L.value,
-	      channel->info.data.L.units?channel->info.data.L.units:"");
+	      channel->info.data.L.units);
 #else	    
 	    winPrintf(channel->d[i].w,"%hu",
 	      (unsigned char)channel->data.L.value);
@@ -131,7 +131,7 @@ void updateDataDisplay(atom *channel,unsigned int i)
 #if 1
 	    winPrintf(channel->d[i].w,"%d %s",
 	      channel->data.L.value,
-	      channel->info.data.L.units?channel->info.data.L.units:"");
+	      channel->info.data.L.units);
 #else	    
 	    winPrintf(channel->d[i].w,"%d",channel->data.L.value);
 #endif	    
@@ -203,7 +203,14 @@ void updateDisplay(atom *channel)
 	mask = mask << (LAST_ITEM - 1);
 	for (i=(LAST_ITEM-1);i>=0;i--) {
 	    if ((channel->updateMask & mask) && (channel->d[i].proc)){
-		(*(channel->d[i].proc))(channel,i);
+		/* Call each stored callback with its declared signature. */
+		if (i == BUTTON || i == FORMAT) {
+		    ((void (*)(atom *, int))channel->d[i].proc)(channel, i);
+		} else if (i == SLIDER || i == INFO || i == HIST || i == ADJUST) {
+		    ((void (*)(atom *))channel->d[i].proc)(channel);
+		} else {
+		    ((void (*)(atom *, unsigned int))channel->d[i].proc)(channel, (unsigned int)i);
+		}
 	    }
 	    mask = mask >> 1;
 	}
