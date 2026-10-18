@@ -38,7 +38,8 @@ Options:
 | `--session file.qtp` | Open a saved PV workspace |
 | `-h`, `--help`, `--version` | Command-line help/version without a display |
 
-Count limits must be between 1 and 1000000. Invalid arguments exit with status
+`--` ends the options: every later argument is a PV name, even one starting
+with `-`. Count limits must be between 1 and 1000000. Invalid arguments exit with status
 2. `--info` returns 1 if any PV is unavailable or its data/metadata times out,
 and 0 on success. GUI discovery continues after the deadline and recovers when
 an IOC returns. PVA requires an EPICS Base built with pvAccess and pvData.
@@ -121,8 +122,8 @@ open PV. A read-only session shows a **Read only** badge beside the entry field.
 PV in the inspector, in QtStripTool. QtProbe writes a small configuration with
 each PV's name, units, display range and precision to its cache folder and
 starts QtStripTool with it; only the newest 20 of these files are kept.
-QtStripTool plots up to ten Channel Access PVs; PVA PVs and any beyond ten are
-skipped with a note in the status bar. QtProbe looks for `QTPROBE_STRIPTOOL`,
+QtStripTool plots up to ten Channel Access PVs; PVA PVs, PVs beyond ten and
+names longer than 63 bytes are skipped with a note in the status bar. QtProbe looks for `QTPROBE_STRIPTOOL`,
 then `qtstriptool` beside `qtprobe`, then on `PATH`, then in a sibling StripTool
 build tree.
 
@@ -303,7 +304,8 @@ use the native value editor for those values. Hexadecimal
 integers can use `0x`. Floating-point writes must be finite. Enum writes accept
 a label or a valid index; when a label reads as a number, typed text selects
 that label. The state list and **Readback** stage text that selects the chosen
-state. CA strings hold at most 39 encoded bytes. Text writes and string-array
+state. CA and PVA text is UTF-8; CA strings hold at most 39 UTF-8 bytes. Bytes
+that are not UTF-8 show as U+FFFD and cannot be written back. Text writes and string-array
 elements reject embedded NUL characters. A byte array takes binary data as a
 JSON array only while it shows numeric values; while it shows text, anything
 typed, including `[1, 0, 2]`, is written as text. Array writes
@@ -447,8 +449,9 @@ underlying samples, statistics and export unchanged. History has two hard
 limits, so QtProbe can run for days without growing: at most `--history` events
 per PV (10000 by default), and an estimated `--history-memory` for all PVs
 together (256 MB by default). Each PV may use an equal share of the memory
-limit; when a PV adds an event beyond either limit, its oldest events are
-dropped, and the newest event is always kept. A busy PV therefore keeps a
+limit; when a PV adds an event beyond either limit, or opening another PV
+shrinks every share, its oldest events are dropped, and the newest event is
+always kept. A busy PV therefore keeps a
 shorter time span than a quiet one. Values longer than 1000 characters, such as
 long strings, are stored shortened with "…" in history and in its CSV; the live
 value, snapshot JSON and Copy value stay exact. The History table shows the
@@ -543,7 +546,7 @@ Use Command instead of Ctrl on macOS where a platform shortcut applies.
 - **Write is disabled:** check read-only mode, connection state, access rights
   and whether a write is pending (a slow record keeps a write pending until it
   finishes). A write whose outcome is unknown (a disconnect during the write,
-  or Reconnect/Stop while it was pending) requires checking readback and
+  Reconnect/Stop while it was pending, or a failed CA array write) requires checking readback and
   reconnecting before another write is enabled. Large 64-bit
   integers use the exact value editor rather than slider/dial adjustments.
 - **Fewer array values shown:** the array table and plot show the first 2048
