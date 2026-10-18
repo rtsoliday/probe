@@ -298,17 +298,19 @@ portable CA server), the gateway converts each CA write to the type it reports
 for the field before the IOC sees it: DOUBLE for ULONG and 64-bit integer
 fields, LONG for USHORT. Integer text, in scalars and arrays alike, is then
 converted by the gateway instead of being parsed by the IOC, and the result
-still reads "Write completed". Values beyond 2^53 are rounded to the nearest
-double, and values near or outside the field's limits are stored as other
-values instead of being rejected: USHORT wraps modulo 65536 (70000 stores
-4464), and on a Linux x86-64 IOC ULONG wraps modulo 2^32 (4294967296 stores
-0), UINT64 values from 2^64−1024 upward, including 18446744073709551615, are
-stored as 0, and INT64 values from 2^63−512 (9223372036854775296, a valid
-value) upward or below the INT64 range are stored as the most negative 64-bit
-integer. IOCs on other platforms can store other wrong values. LONG and USHORT
-writes beyond ±2147480000 fail at the gateway, including valid LONG values.
-Write USHORT, ULONG and 64-bit integer fields, and LONG values near the 32-bit
-limits, with `pva://` when CA goes through a gateway. Numeric
+still reads "Write completed". Values beyond 2^53 in magnitude are rounded to
+the nearest double, and values near or outside the field's limits are stored
+as other values instead of being rejected. USHORT wraps modulo 65536 (70000
+stores 4464). On a Linux x86-64 IOC built with GCC, ULONG wraps modulo 2^32
+(4294967296 stores 0); UINT64 values from 2^64−1024 upward, including
+18446744073709551615, are stored as 0; and INT64 values from 2^63−512
+(9223372036854775296, a valid value) upward, or below the INT64 range, are
+stored as the most negative 64-bit integer. IOCs built for other platforms or
+with other compilers can store other wrong values. CA scalar writes to LONG
+and USHORT fields beyond ±2147480000 fail at the gateway, including valid LONG
+values; nothing is written. Write USHORT, ULONG and 64-bit integer fields, and
+LONG scalars near the 32-bit limits, with `pva://` when CA goes through a
+gateway. Numeric
 adjustments are disabled for 64-bit integers beyond the exact range of double;
 use the native value editor for those values. Hexadecimal
 integers can use `0x`. Floating-point writes must be finite. Enum writes accept
