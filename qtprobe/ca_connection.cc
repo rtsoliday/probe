@@ -280,7 +280,11 @@ public:
         static const QRegularExpression integer("^[+-]?[0-9]{1,20}$");
         std::vector<std::array<char, MAX_STRING_SIZE>> text;
         for (int i = 0; i < values.size(); ++i) {
-          const auto trimmed = values[i].trimmed(); const double number = data[size_t(i)];
+          auto trimmed = values[i].trimmed(); const double number = data[size_t(i)];
+          // The IOC parses UINT64 text with base 0, where a leading zero selects
+          // octal ("010" would store 8): send integers without leading zeros.
+          const int start = trimmed.startsWith('+') || trimmed.startsWith('-') ? 1 : 0;
+          while (trimmed.size() > start + 1 && trimmed.at(start) == '0' && trimmed.at(start + 1).isDigit()) trimmed.remove(start, 1);
           QString encoded;
           if (integer.match(trimmed).hasMatch()) encoded = trimmed;
           else if (std::abs(number) >= 1e38 || (number != 0 && std::abs(number) < 1)) {

@@ -520,6 +520,17 @@ private slots:
     QTRY_COMPARE(wide.snapshot.count, quint64(4));
     QCOMPARE(wide.snapshot.values.mid(1), (QStringList{"1e-100", "-1e-100", "1.5"}));
   }
+  void caUInt64IntegerTextIsDecimal() {
+    // UINT64 fields parse text with base 0; integer text keeps its decimal value.
+    Channel ca({prefix + "uint64Array", "ca"}); ca.start(); QTRY_VERIFY_WITH_TIMEOUT(ca.snapshot.hasValue && ca.snapshot.writable, 10000);
+    QSignalSpy done(&ca, &Channel::writeFinished);
+    ca.write("[\"9007199254740993\", \"010\", \"0100\", \"-0\"]"); QTRY_COMPARE(done.size(), 1); QVERIFY(done[0][0].toBool());
+    QTRY_COMPARE(ca.snapshot.values.mid(1), (QStringList{"10", "100", "0"}));
+#if QTPROBE_HAVE_PVA
+    Channel exact({prefix + "uint64Array", "pva"}); exact.start();
+    QTRY_COMPARE_WITH_TIMEOUT(exact.snapshot.values, (QStringList{"9007199254740993", "10", "100", "0"}), 10000);
+#endif
+  }
   void slowRecordWriteCompletes() {
     // A put-callback still processing after 10 s on a connected PV keeps waiting and then reports its real result.
     Options options; Inspector slow(Address::parse(prefix + "slower.A"), options); slow.show(); auto* channel = slow.channel();
