@@ -189,6 +189,7 @@ struct Event {
   // GetDone: the stored array length, or the stored scalar text.
   size_t stored = 0;
   std::string storedText;
+  pvd::shared_vector<const std::string> storedStrings;
   explicit Event(Kind k, bool success = true, QString msg = {}) : kind(k), ok(success), message(std::move(msg)) {}
 };
 struct Inbox {
@@ -265,7 +266,10 @@ struct PutRequester : pva::ChannelPutRequester {
     Event e(Event::GetDone, status.isSuccess() && data, QString::fromStdString(status.getMessage())); e.epoch = epoch;
     if (e.ok) {
       auto value = data->getSubField("value");
-      if (auto array = std::dynamic_pointer_cast<pvd::PVScalarArray>(value)) e.stored = array->getLength();
+      if (auto array = std::dynamic_pointer_cast<pvd::PVScalarArray>(value)) {
+        e.stored = array->getLength();
+        if (auto strings = std::dynamic_pointer_cast<pvd::PVStringArray>(value)) e.storedStrings = strings->view();
+      }
       else if (auto scalar = std::dynamic_pointer_cast<pvd::PVScalar>(value)) e.storedText = scalar->getAs<std::string>();
       else e.ok = false;
     }
@@ -315,7 +319,12 @@ class Pva final : public Connection {
   pvd::StructureConstPtr putStructure;
   // Servers may shorten strings and arrays without an error (QSRV keeps 39
   // bytes of a DBF_STRING and NELM elements), so such writes are read back.
-  struct Check { bool active = false, text = false; size_t sent = 0; std::string value; } check;
+  struct Check {
+    bool active = false, text = false;
+    size_t sent = 0;
+    std::string value;
+    pvd::shared_vector<const std::string> strings;
+  } check;
   void clearOperations() {
     ++epoch;
     putStructure.reset(); check = {};
@@ -393,6 +402,13 @@ public:
           note += QString(", but the server kept only %1 of %2 bytes (field size). Check the readback.").arg(e.storedText.size()).arg(check.sent);
         else if (!check.text && e.stored < check.sent)
           note += QString(", but the server kept only %1 of %2 elements (field size). Check the readback.").arg(e.stored).arg(check.sent);
+        else for (size_t i = 0; i < std::min(check.strings.size(), e.storedStrings.size()); ++i) {
+          const auto& sent = check.strings[i]; const auto& stored = e.storedStrings[i];
+          if (stored.size() < sent.size() && sent.compare(0, stored.size(), stored) == 0) {
+            note += QString(", but the server kept only %1 of %2 bytes in string element %3 (field size). Check the readback.").arg(stored.size()).arg(sent.size()).arg(i);
+            break;
+          }
+        }
         check = {}; owner.completeWrite(true, note); break;
       }
       case Event::Error: s.error = e.message; break;
@@ -419,12 +435,14 @@ public:
       const auto type = scalar->getScalar()->getScalarType();
       const auto text = validate(values[0], type).toStdString();
       scalar->putFrom<std::string>(text);
-      if (type == pvd::pvString) next = {true, true, text.size(), text};
+      if (type == pvd::pvString) next = {true, true, text.size(), text, {}};
     } else if (auto array = std::dynamic_pointer_cast<pvd::PVScalarArray>(value)) {
       pvd::shared_vector<std::string> input;
       for (const auto& v : values) input.push_back(validate(v, array->getScalarArray()->getElementType()).toStdString());
-      next = {true, false, input.size(), {}};
-      array->putFrom<std::string>(pvd::freeze(input));
+      next = {true, false, input.size(), {}, {}};
+      const auto frozen = pvd::freeze(input);
+      if (array->getScalarArray()->getElementType() == pvd::pvString) next.strings = frozen;
+      array->putFrom<std::string>(frozen);
     } else throw std::runtime_error("This PVA structure is inspection only");
     check = std::move(next);
     pvd::BitSet::shared_pointer bits(new pvd::BitSet);

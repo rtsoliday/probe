@@ -570,6 +570,16 @@ private slots:
     text.write("hello"); QTRY_COMPARE(textDone.size(), 2); QCOMPARE(textDone[1][1].toString(), QString("Write completed"));
     array.write("[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]"); QTRY_COMPARE(arrayDone.size(), 1); QVERIFY(arrayDone[0][0].toBool());
     QVERIFY2(arrayDone[0][1].toString().contains("kept only 8 of 10 elements"), qPrintable(arrayDone[0][1].toString()));
+    Channel strings({prefix + "stringArray", "pva"}); strings.start();
+    QTRY_VERIFY_WITH_TIMEOUT(strings.snapshot.hasValue && strings.snapshot.writable, 10000);
+    QSignalSpy stringsDone(&strings, &Channel::writeFinished);
+    strings.write(QString::fromUtf8(QJsonDocument(QJsonArray{QString(60, 'S'), QString(60, 'T')}).toJson(QJsonDocument::Compact)));
+    QTRY_COMPARE(stringsDone.size(), 1); QVERIFY(stringsDone[0][0].toBool());
+    QTRY_COMPARE(strings.snapshot.values, (QStringList{QString(39, 'S'), QString(39, 'T')}));
+    QVERIFY2(stringsDone[0][1].toString().contains("kept only 39 of 60 bytes in string element 0"), qPrintable(stringsDone[0][1].toString()));
+    strings.write("[\"left\", \"right\"]"); QTRY_COMPARE(stringsDone.size(), 2); QVERIFY(stringsDone[1][0].toBool());
+    QCOMPARE(stringsDone[1][1].toString(), QString("Write completed"));
+    QTRY_COMPARE(strings.snapshot.values, (QStringList{"left", "right"}));
 #else
     QSKIP("Built without pvAccess");
 #endif

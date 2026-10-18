@@ -236,6 +236,9 @@ a later one. QtProbe requests fresh readback, reports the potentially partial
 write, disables Undo and keeps further writes disabled until **Reconnect**.
 CA array writes are not transactional; a failure does not imply that the whole
 array stayed unchanged.
+After a pvAccess string or array put, QtProbe checks readback for server size
+limits. Its completion message warns if the server kept fewer elements or
+shortened a string, including individual elements of a string array.
 
 **Undo** writes back the exact value QtProbe last received before your last
 successful write from this inspector; its tooltip shows that value. A monitor
