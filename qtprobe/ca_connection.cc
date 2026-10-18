@@ -269,7 +269,9 @@ public:
         bool ok; double number = value.toDouble(&ok);
         if (!ok || !std::isfinite(number) || (native == DBF_FLOAT && std::abs(number) > std::numeric_limits<float>::max()))
           throw std::runtime_error("Invalid or out-of-range floating-point value");
-        beyondExact = beyondExact || (native == DBF_DOUBLE && std::abs(number) >= 9007199254740992.0);
+        // CA also serves ULONG fields as DBF_DOUBLE, and the IOC casts a binary
+        // double to them unchecked, so a scalar of 2^32 or more goes as text too.
+        beyondExact = beyondExact || (native == DBF_DOUBLE && std::abs(number) >= (count == 1 ? 4294967296.0 : 9007199254740992.0));
         data.push_back(number);
       }
       if (beyondExact) {
@@ -323,7 +325,13 @@ public:
         if (!ok || number < lo || number > hi) throw std::runtime_error("Invalid or out-of-range integer value");
         data.push_back(dbr_long_t(number));
       }
-      check(ca_array_put_callback(DBR_LONG, count, id, data.data(), written, this));
+      if (native == DBF_LONG && count == 1 && (data[0] < 0 || data[0] > 65535)) {
+        // CA serves USHORT fields as DBF_LONG, and the IOC casts a binary long to
+        // them unchecked. Decimal text is range checked for the field's own type.
+        const auto bytes = QByteArray::number(qlonglong(data[0]));
+        std::array<char, MAX_STRING_SIZE> item{}; std::memcpy(item.data(), bytes.constData(), size_t(bytes.size()));
+        check(ca_array_put_callback(DBR_STRING, 1, id, item.data(), written, this));
+      } else check(ca_array_put_callback(DBR_LONG, count, id, data.data(), written, this));
     }
     ca_flush_io();
   }

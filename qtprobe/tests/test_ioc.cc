@@ -520,6 +520,31 @@ private slots:
     QTRY_COMPARE(wide.snapshot.count, quint64(4));
     QCOMPARE(wide.snapshot.values.mid(1), (QStringList{"1e-100", "-1e-100", "1.5"}));
   }
+  void caUnsignedFieldsRejectOutOfRange() {
+    // CA serves USHORT fields as LONG and ULONG fields as DOUBLE; out-of-range scalars must not wrap.
+    Channel shift({prefix + "unsignedFields.SHFT", "ca"}), raw({prefix + "unsignedFields.ZRVL", "ca"}); shift.start(); raw.start();
+    QTRY_VERIFY_WITH_TIMEOUT(shift.snapshot.hasValue && shift.snapshot.writable && raw.snapshot.hasValue && raw.snapshot.writable, 10000);
+    QCOMPARE(shift.snapshot.type, QString("DBF_LONG")); QCOMPARE(raw.snapshot.type, QString("DBF_DOUBLE"));
+    for (auto [channel, good, bad, last] : {std::tuple<Channel*, QString, QStringList, QString>{&shift, "5", {"70000", "-70000"}, "65535"},
+                                            {&raw, "7", {"4294967296", "5000000000", "-5000000000"}, "4294967295"}}) {
+      QSignalSpy done(channel, &Channel::writeFinished);
+      channel->write(good); QTRY_COMPARE(done.size(), 1); QVERIFY(done[0][0].toBool()); QTRY_COMPARE(channel->snapshot.number, good.toDouble());
+      for (const auto& text : bad) {
+        channel->write(text); QTRY_COMPARE(done.size(), 1 + bad.indexOf(text) + 1);
+        QVERIFY2(!done.back()[0].toBool(), qPrintable(text + " was accepted"));
+        QTest::qWait(150); QCOMPARE(channel->snapshot.number, good.toDouble());
+      }
+      channel->write(last); QTRY_COMPARE(done.size(), int(bad.size()) + 2); QVERIFY(done.back()[0].toBool()); QTRY_COMPARE(channel->snapshot.number, last.toDouble());
+    }
+    // Genuine LONG and DOUBLE fields still take those values exactly.
+    Channel integer({prefix + "integer", "ca"}), wide({prefix + "wide", "ca"}); integer.start(); wide.start();
+    QTRY_VERIFY_WITH_TIMEOUT(integer.snapshot.writable && wide.snapshot.writable, 10000);
+    QSignalSpy i(&integer, &Channel::writeFinished), w(&wide, &Channel::writeFinished);
+    integer.write("70000"); QTRY_COMPARE(i.size(), 1); QVERIFY(i[0][0].toBool()); QTRY_COMPARE(integer.snapshot.number, 70000.0);
+    integer.write("-70000"); QTRY_COMPARE(i.size(), 2); QVERIFY(i[1][0].toBool()); QTRY_COMPARE(integer.snapshot.number, -70000.0);
+    wide.write("5000000000.5"); QTRY_COMPARE(w.size(), 1); QVERIFY(w[0][0].toBool()); QTRY_COMPARE(wide.snapshot.number, 5000000000.5);
+    integer.write("2147483647"); QTRY_COMPARE(i.size(), 3); QVERIFY(i[2][0].toBool());  // shared fixture value
+  }
   void caTextPathRefusesSubnormalPeers() {
     // The IOC would reject a subnormal text element part-way through the array.
     Channel wide({prefix + "array", "ca"}); wide.start(); QTRY_VERIFY_WITH_TIMEOUT(wide.snapshot.hasValue && wide.snapshot.writable, 10000);
