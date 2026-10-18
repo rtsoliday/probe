@@ -408,6 +408,15 @@ private slots:
     inspector.requestWrite("[4, 5]"); QVERIFY2(question.contains("Write 2 elements [4, 5]") && question.contains("Current value: 3 elements [1, 2, 3]"), qPrintable(question));
     question.clear(); inspector.requestWrite("not json"); QVERIFY(question.isEmpty());
   }
+  void structureControlsFollowBrowserLifetime() {
+    QPointer<QWidget> controls;
+    {
+      StructureBrowser browser;
+      controls = browser.controls();
+      QVERIFY(controls);
+    }
+    QVERIFY(controls.isNull());
+  }
   void structureTooltipFollowsLaterElements() {
     // Only element [20] changes, so the 16-element summary stays the same; the row's tooltip must not.
     StructureBrowser browser; browser.show();

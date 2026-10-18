@@ -56,7 +56,7 @@ private:
 } // namespace
 StructureBrowser::StructureBrowser(QWidget* parent) : QWidget(parent) {
   setObjectName("structureBrowser");
-  tools = new QWidget; auto* row = new QHBoxLayout(tools); row->setContentsMargins(0, 0, 0, 0); row->setSpacing(4);
+  tools = new QWidget(this); auto* row = new QHBoxLayout(tools); row->setContentsMargins(0, 0, 0, 0); row->setSpacing(4);
   filter = new QLineEdit; filter->setObjectName("structureFilter"); filter->setPlaceholderText("Find a field, type or value…");
   filter->setClearButtonEnabled(true); filter->setAccessibleName("Filter structure fields"); row->addWidget(filter, 1);
   auto quiet = [&](const QString& text, const char* name, const QString& tip) {
