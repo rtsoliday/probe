@@ -6,7 +6,9 @@ OBJEXT := $(if $(filter Windows,$(OS)),obj,o)
 EXEEXT := $(if $(filter Windows,$(OS)),.exe)
 OBJECTS = $(addprefix $(OBJ_DIR)/,$(SOURCES:.cc=.$(OBJEXT))) $(OBJ_DIR)/moc_channel.$(OBJEXT) $(OBJ_DIR)/resources.$(OBJEXT)
 HEADERS = $(wildcard *.h)
-CPPFLAGS += -I. -I$(OBJ_DIR) $(EPICS_INCLUDES) -DQTPROBE_HAVE_PVA=$(HAVE_PVA)
+# moc gets only these flags; compiler options from an environment CPPFLAGS would stop it.
+QTPROBE_CPPFLAGS = -I. -I$(OBJ_DIR) $(EPICS_INCLUDES) -DQTPROBE_HAVE_PVA=$(HAVE_PVA)
+CPPFLAGS += $(QTPROBE_CPPFLAGS)
 CXXFLAGS ?= -O2 -g -Wall -Wextra -Wno-unused-parameter -std=c++17 -fPIC
 LIBS = $(if $(filter 1,$(HAVE_PVA)),$(PVA_LIBS)) $(CA_LIBS) $(EPICS_SYS_LIBS) $(QT_LIBS)
 # Shared EPICS libraries need a run path; static ones (the default) must not add
@@ -16,7 +18,7 @@ LDFLAGS += $(if $(filter %.$(EPICS_SHARED_EXT),$(CA_LIBS) $(PVA_LIBS)),-Wl$(comm
 # Legacy MEDM's Motif drop protocol is available on X11 without linking Motif.
 ifeq ($(OS),Linux)
 ifneq ($(shell $(PKG_CONFIG) --exists xcb && echo yes),)
-CPPFLAGS += -DQTPROBE_HAVE_XCB $(shell $(PKG_CONFIG) --cflags xcb)
+QTPROBE_CPPFLAGS += -DQTPROBE_HAVE_XCB $(shell $(PKG_CONFIG) --cflags xcb)
 QT_LIBS += $(shell $(PKG_CONFIG) --libs xcb)
 endif
 endif
@@ -25,7 +27,7 @@ CXX := cl
 CXXFLAGS = /nologo /O2 /W3 /external:anglebrackets /external:W0 /MD /EHsc /permissive- /Zc:lambda /Zc:__cplusplus /utf-8 /std:c++17
 # Older EPICS pvData headers need delayed template lookup only in the PVA unit.
 $(OBJ_DIR)/pva_connection.obj: CXXFLAGS += /Zc:twoPhase-
-CPPFLAGS += -DEPICS_CALL_DLL -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS
+QTPROBE_CPPFLAGS += -DEPICS_CALL_DLL -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS
 LDFLAGS :=
 define compile
 	$(CXX) $(CPPFLAGS) $(QT_CFLAGS) $(CXXFLAGS) $(1) /c $< /Fo$@
@@ -59,7 +61,7 @@ $(OBJ_DIR):
 $(OBJ_DIR)/%.$(OBJEXT): %.cc $(HEADERS) Makefile ../Makefile.rules | $(OBJ_DIR)
 	$(call compile,)
 $(OBJ_DIR)/moc_channel.cc: channel.h Makefile ../Makefile.rules | $(OBJ_DIR)
-	$(MOC) $(CPPFLAGS) $(QT_CFLAGS) $< -o $@
+	$(MOC) $(QTPROBE_CPPFLAGS) $(QT_CFLAGS) $< -o $@
 $(OBJ_DIR)/moc_channel.$(OBJEXT): $(OBJ_DIR)/moc_channel.cc Makefile ../Makefile.rules
 	$(call compile,)
 $(OBJ_DIR)/resources.cc: resources/qtprobe.qrc $(wildcard resources/*.svg) ../docs/qtprobe-guide.md | $(OBJ_DIR)
@@ -73,7 +75,7 @@ install: $(OBJ_DIR)/qtprobe$(EXEEXT)
 	cp -f $< $(BIN_DIR)/
 	$(if $(EPICS_BIN_DIR),cp -f $< $(EPICS_BIN_DIR)/)
 $(OBJ_DIR)/test_%.moc: tests/test_%.cc Makefile ../Makefile.rules | $(OBJ_DIR)
-	$(MOC) $(CPPFLAGS) $(QT_CFLAGS) $(QT_TEST_CFLAGS) $< -o $@
+	$(MOC) $(QTPROBE_CPPFLAGS) $(QT_CFLAGS) $(QT_TEST_CFLAGS) $< -o $@
 $(OBJ_DIR)/test_%.$(OBJEXT): tests/test_%.cc $(OBJ_DIR)/test_%.moc $(HEADERS) $(wildcard tests/*.h) Makefile ../Makefile.rules
 	$(call compile,$(QT_TEST_CFLAGS) -DEPICS_TEST_BIN='"$(EPICS_BASE)/bin/$(EPICS_HOST_ARCH)"')
 $(OBJ_DIR)/test_%$(EXEEXT): $(OBJ_DIR)/test_%.$(OBJEXT) $(OBJECTS)
