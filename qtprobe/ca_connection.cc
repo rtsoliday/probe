@@ -75,7 +75,10 @@ class Ca final : public Connection {
     s.type = dbf_type_to_text(native); s.capacity = ca_element_count(a.chid);
     s.array = s.capacity > 1; s.numeric = native != DBF_STRING;
     s.bytes = native == DBF_CHAR && s.array;
-    s.metadataReady = false; s.fields.clear(); s.choices.clear();
+    // DESC/RTYP belong to the companion channels, which clear them when they
+    // disconnect; their values may arrive before this callback, so keep them.
+    s.metadataReady = false; s.choices.clear();
+    for (auto it = s.fields.begin(); it != s.fields.end();) it = it.key() == "DESC" || it.key() == "RTYP" ? std::next(it) : s.fields.erase(it);
     // The PV may return with another native type (a changed record); the
     // server would convert values to the old request type, so resubscribe.
     const long valueType = dbf_type_to_DBR_TIME(native), metaType = native == DBF_STRING ? -1 : native == DBF_ENUM ? DBR_CTRL_ENUM : DBR_CTRL_DOUBLE;
@@ -165,7 +168,12 @@ class Ca final : public Connection {
   }
   static void extraConnection(connection_handler_args a) {
     auto e = static_cast<Extra*>(ca_puser(a.chid));
-    if (a.op != CA_OP_CONN_UP || e->monitor) return;
+    if (a.op != CA_OP_CONN_UP) {
+      // A value from an earlier connection may be stale (the record may have changed).
+      if (!e->owner->closing && e->owner->s.fields.remove(e->field)) e->owner->markDirty();
+      return;
+    }
+    if (e->monitor) return;
     ca_create_subscription(DBR_STRING, 1, a.chid, DBE_VALUE, extraValue, e, &e->monitor);
     ca_flush_io();
   }
