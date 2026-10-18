@@ -178,6 +178,16 @@ private slots:
     for (double value : {1e-308, -1e-308}) { s.number = value; s.values = QStringList{QString::number(value, 'g', 17)}; history.append(s); }
     QVERIFY2(history.statistics().contains("σ 1e-308"), qPrintable(history.statistics()));
   }
+  void statisticsKeepLargeOffsetSpread() {
+    Snapshot s; s.connected = s.readable = s.hasValue = s.numeric = true;
+    History history(10000);
+    // A 64-bit counter: a large offset with a small spread.
+    for (int k = 0; k < 10000; ++k) { s.number = 1e13 + k; s.values = QStringList{QString::number(s.number, 'f', 0)}; history.append(s); }
+    QVERIFY2(history.statistics().contains("Mean 1.0000000e+13") || history.statistics().contains("Mean 1e+13"), qPrintable(history.statistics()));
+    QVERIFY2(history.statistics().contains("σ 2886.7513"), qPrintable(history.statistics()));
+    history.clear(); s.number = 7; s.values = QStringList{"7"}; history.append(s); history.append(s);
+    QVERIFY2(history.statistics().contains("Mean 7") && history.statistics().contains("σ 0"), qPrintable(history.statistics()));
+  }
   void historyMemoryIsBoundedAcrossPvs() {
     History::setMemoryBudget(size_t(1) << 20);
     Snapshot s; s.connected = s.readable = s.hasValue = s.numeric = true; s.seconds = 1700000000;

@@ -219,16 +219,18 @@ QString History::statistics() const {
     lo = std::min(lo, s.number); hi = std::max(hi, s.number);
   }
   if (!n) return QString("%1 events; no numeric samples").arg(samples.size());
-  // Normalize before Welford's calculation: finite opposite extremes can
-  // overflow a delta/square, and tiny finite values can underflow the variance.
-  const double scale = std::max(std::abs(lo), std::abs(hi));
+  // Center on the range and normalize by its half-width before Welford's
+  // calculation: finite opposite extremes can overflow a delta/square, tiny
+  // finite values can underflow the variance, and a large offset with a small
+  // spread (a 64-bit counter) would otherwise lose the spread's low-order bits.
+  const double span = hi - lo, half = std::isfinite(span) ? span / 2 : hi / 2 - lo / 2, mid = lo + half;
   double mean = 0, m2 = 0; size_t count = 0;
-  if (scale > 0) for (const auto& s : samples) if (std::isfinite(s.number)) {
-    const double value = s.number / scale, delta = value - mean;
+  if (half > 0) for (const auto& s : samples) if (std::isfinite(s.number)) {
+    const double value = (s.number - mid) / half, delta = value - mean;
     mean += delta / ++count; m2 += delta * (value - mean);
   }
-  const double average = std::clamp(mean, -1.0, 1.0) * scale;
-  const double deviation = std::sqrt(std::clamp(m2 / n, 0.0, 1.0)) * scale;
+  const double average = std::clamp(mid + std::clamp(mean, -1.0, 1.0) * half, lo, hi);
+  const double deviation = std::sqrt(std::clamp(m2 / n, 0.0, 1.0)) * half;
   return QString("%1 numeric samples    Min %2    Max %3    Mean %4    σ %5")
       .arg(n).arg(lo, 0, 'g', 8).arg(hi, 0, 'g', 8).arg(average, 0, 'g', 8).arg(deviation, 0, 'g', 8);
 }
