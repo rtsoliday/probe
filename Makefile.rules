@@ -82,9 +82,11 @@ ifneq ($(wildcard $(QT_HEADERS)/QtWidgets/QApplication),)
 HAVE_QT := 1
 QT_HOST_BINS := $(shell $(QMAKE) -query QT_HOST_BINS)
 QT_LIBEXEC := $(shell $(QMAKE) -query QT_HOST_LIBEXECS)
-QT_CFLAGS = $(addprefix -I,$(QT_HEADERS) $(addprefix $(QT_HEADERS)/Qt,Core Gui Widgets Network))
+# Module defines as pkg-config gives them: Qt Test needs QT_WIDGETS_LIB for
+# QApplication in QTEST_MAIN and for its widget mouse and key functions.
+QT_CFLAGS = -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB -DQT_NETWORK_LIB $(addprefix -I,$(QT_HEADERS) $(addprefix $(QT_HEADERS)/Qt,Core Gui Widgets Network))
 QT_LIBS = -L$(QT_LIBRARY_DIR) $(addprefix -l$(QT_PREFIX),Widgets Gui Network Core)
-QT_TEST_CFLAGS = -I$(QT_HEADERS)/QtTest
+QT_TEST_CFLAGS = -DQT_TESTLIB_LIB -I$(QT_HEADERS)/QtTest
 QT_TEST_LIBS = -L$(QT_LIBRARY_DIR) -l$(QT_PREFIX)Test
 endif
 endif
