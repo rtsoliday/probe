@@ -84,6 +84,11 @@ void Channel::writeValues(const QStringList& values) {
   if (readOnly_ || !snapshot.connected || !snapshot.writable || !connection || writePending_ || writeUncertain_ || values.isEmpty()) {
     emit writeFinished(false, "Write unavailable: read-only, disconnected, denied, pending or uncertain completion."); return;
   }
+  // pvAccess keeps the previous type and states until the first value after a
+  // reconnect; text parsed against them could select another state.
+  if (address.provider == "pva" && !snapshot.hasValue) {
+    emit writeFinished(false, "Write unavailable: waiting for the PV's first value after connecting."); return;
+  }
   for (const auto& value : values) if (value.contains(QChar(0))) {
     emit writeFinished(false, "Text elements cannot contain embedded NUL characters."); return;
   }

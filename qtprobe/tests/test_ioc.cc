@@ -812,6 +812,18 @@ private slots:
     stopIoc(); ioc.waitForFinished(5000); saveLog(); launch();  // before the checks, so later tests keep their IOC
     QVERIFY(stale); QVERIFY2(result.contains("changed"), qPrintable(result)); QCOMPARE(after, QString("12.75"));
   }
+  void pvaWriteWaitsForFirstValue() {
+#if QTPROBE_HAVE_PVA
+    // After a reconnect, until the first value, the snapshot still holds the previous states.
+    Channel e({prefix + "enum", "pva"}); e.start(); QTRY_VERIFY_WITH_TIMEOUT(e.snapshot.hasValue && e.snapshot.writable && e.snapshot.choices.size() == 3, 10000);
+    const double before = e.snapshot.number; QSignalSpy done(&e, &Channel::writeFinished);
+    e.snapshot.hasValue = false; e.snapshot.choices = QStringList{"Off", "Standby", "On"};
+    e.write("Off"); e.writeValues({"2"}); QCOMPARE(done.size(), 2);
+    QVERIFY(!done[0][0].toBool() && !done[1][0].toBool()); QVERIFY(done[0][1].toString().contains("first value"));
+    QTest::qWait(300); Channel check({prefix + "enum", "ca"}); check.start(); QTRY_VERIFY_WITH_TIMEOUT(check.snapshot.hasValue, 10000);
+    QCOMPARE(check.snapshot.number, before);
+#endif
+  }
   void recordFieldsStayUniqueAcrossTypeChanges() {
     Channel subject({prefix + "retype", "ca"}); subject.start();
     QTRY_VERIFY_WITH_TIMEOUT(subject.snapshot.hasValue, 10000);
