@@ -22,7 +22,8 @@ Address Address::parse(QString text, QString provider) {
 }
 QString epicsTimestamp(qint64 seconds, int nanoseconds) {
   if (!seconds) return {};
-  return QDateTime::fromSecsSinceEpoch(seconds, QTimeZone::utc()).toString("yyyy-MM-dd'T'HH:mm:ss") +
+  // C locale: Qt 5 formats with the user's locale, whose digits need not be ASCII.
+  return QLocale::c().toString(QDateTime::fromSecsSinceEpoch(seconds, QTimeZone::utc()), QStringLiteral("yyyy-MM-dd'T'HH:mm:ss")) +
       QString(".%1Z").arg(nanoseconds, 9, 10, QLatin1Char('0'));
 }
 QString Snapshot::timestamp() const { return epicsTimestamp(seconds, nanoseconds); }

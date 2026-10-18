@@ -7,6 +7,7 @@
 #include <QTemporaryDir>
 #include <QJsonDocument>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QTcpServer>
 #include <QUdpSocket>
 #include <clocale>
@@ -342,6 +343,12 @@ private slots:
       process.start(exe, {"--info", "-w", "5", prefix + "number"}); QVERIFY(process.waitForFinished(10000)); QCOMPARE(process.exitCode(), 0);
       const auto errors = process.readAllStandardError(); QVERIFY2(!errors.contains("real number"), errors.constData());
     }
+    // Timestamps stay ASCII ISO 8601 whatever digits the user's locale uses.
+    auto arabic = env; arabic.remove("LC_ALL"); arabic.remove("LC_NUMERIC"); arabic.remove("LC_TIME"); arabic.insert("LANG", "ar_EG.UTF-8");
+    process.setProcessEnvironment(arabic); process.start(exe, {"--info", "--json", "-w", "5", prefix + "number"});
+    QVERIFY(process.waitForFinished(10000)); QCOMPARE(process.exitCode(), 0);
+    const auto stamp = QJsonDocument::fromJson(process.readAllStandardOutput()).array().at(0).toObject().value("timestamp").toString();
+    QVERIFY2(QRegularExpression("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{9}Z$").match(stamp).hasMatch(), qPrintable(stamp));
   }
   void pvaStructureTree() {
 #if QTPROBE_HAVE_PVA
