@@ -523,7 +523,7 @@ Use Command instead of Ctrl on macOS where a platform shortcut applies.
 | PV table | Enter or double-click | Inspect the selected PV |
 | PV table | Ctrl+A / Ctrl+C / Esc | Select all shown rows / copy them / clear the selection |
 | Table filter | Down | Move into the table |
-| Main window | Ctrl+Q | Quit QtProbe |
+| Main window | Ctrl+Q (Alt+F4 on Windows) | Quit QtProbe |
 | PV name field | Enter | Open the named PV |
 | Write box | Enter | Write the edit when writing is available |
 | Help | Ctrl+F | Focus Find in help |
