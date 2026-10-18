@@ -230,7 +230,11 @@ long motor move or another asynchronous record), the result line says the
 record is still processing and QtProbe keeps waiting while the PV stays
 connected; the result is reported when the server sends it. **Reconnect** or
 **Stop** abandons the wait, and a disconnect during the write leaves its outcome
-unknown: inspect readback and reconnect before another write is enabled. Stop
+unknown: inspect readback and reconnect before another write is enabled.
+Through a CA gateway, a write interrupted by the gateway losing the IOC is
+reported as "Channel write request failed"; arriving with the disconnect, it is
+also treated as unknown. Check readback after any failed write through a
+gateway. Stop
 fields such as a motor's `STOP` are separate PVs and can be written from their
 own inspector.
 A failed CA array put may have changed earlier elements before the IOC rejected

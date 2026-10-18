@@ -561,6 +561,13 @@ private slots:
     wide.write("5000000000.5"); QTRY_COMPARE(w.size(), 1); QVERIFY(w[0][0].toBool()); QTRY_COMPARE(wide.snapshot.number, 5000000000.5);
     integer.write("2147483647"); QTRY_COMPARE(i.size(), 3); QVERIFY(i[2][0].toBool());  // shared fixture value
   }
+  void caRejectedWriteStaysDefinite() {
+    // A put the IOC refuses while connected (DISP=1) is a definite failure: no lock, Undo unaffected.
+    Channel c({prefix + "putDisabled", "ca"}); c.start(); QTRY_VERIFY_WITH_TIMEOUT(c.snapshot.hasValue && c.snapshot.writable, 10000);
+    QSignalSpy done(&c, &Channel::writeFinished);
+    c.write("1"); QTRY_COMPARE(done.size(), 1); QVERIFY(!done[0][0].toBool()); QVERIFY2(!c.writeUncertain(), qPrintable(done[0][1].toString()));
+    c.write("2"); QTRY_COMPARE(done.size(), 2); QVERIFY(!done[1][1].toString().startsWith("Write unavailable"));
+  }
   void caDollarLinkFieldWrite() {
     // Link fields opened with $ take their exact text over CA; a refused link changes nothing and locks nothing.
     Channel link({prefix + "linkTarget.INPA$", "ca"}); link.start(); QTRY_VERIFY_WITH_TIMEOUT(link.snapshot.hasValue && link.snapshot.writable, 10000);

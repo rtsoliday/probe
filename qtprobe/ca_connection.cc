@@ -251,6 +251,12 @@ public:
     if (putDone) {
       putDone = false;
       if (!putOK && arrayPut && s.connected) refetch();
+      // A CA gateway reports a put interrupted by losing its IOC as a failure,
+      // followed at once by a disconnect; the IOC may have applied it.
+      if (!putOK && !putUncertain && !s.connected) {
+        putUncertain = true;
+        putMessage = QString("%1; the connection was lost at the same time, so the outcome is unknown. Check readback and reconnect before retrying.").arg(putMessage);
+      }
       owner.completeWrite(putOK, putMessage, putUncertain);
     }
   }

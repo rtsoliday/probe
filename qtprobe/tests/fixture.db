@@ -35,5 +35,6 @@ record(waveform, "$(P)longText") { field(FTVL, "CHAR") field(NELM, "64") }
 record(calc, "$(P)counter") { field(CALC, "A+1") field(INPA, "$(P)counter NPP") }
 record(calc, "$(P)calcLinked") { field(SCAN, "1 second") field(INPA, "$(P)number CP") field(CALC, "A*2") field(FLNK, "$(P)text") }
 record(ai, "$(P)disabled") { field(SCAN, "1 second") field(DISA, "1") field(DISV, "1") }
+record(ao, "$(P)putDisabled") { field(DISP, "1") }
 record(calcout, "$(P)slow") { field(CALC, "A") field(ODLY, "2") }
 record(calcout, "$(P)slower") { field(CALC, "A") field(ODLY, "13") }
