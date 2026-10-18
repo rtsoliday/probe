@@ -72,10 +72,7 @@ QT_TEST_CFLAGS = $(shell $(PKG_CONFIG) --cflags $(QT_PREFIX)Test 2>/dev/null)
 QT_TEST_LIBS = $(shell $(PKG_CONFIG) --libs $(QT_PREFIX)Test 2>/dev/null)
 QT_HOST_BINS := $(shell $(PKG_CONFIG) --variable=host_bins $(QT_PREFIX)Core 2>/dev/null)
 QT_LIBEXEC := $(shell $(PKG_CONFIG) --variable=libexecdir $(QT_PREFIX)Core 2>/dev/null)
-# A QMAKE (or QMAKE6 for Qt 6) given on the make command line selects that Qt
-# instead of pkg-config; one inherited from the environment does not (F-030).
-QT_QMAKE_EXPLICIT := $(filter command line,$(origin QMAKE) $(if $(filter 6,$(QT_VERSION)),$(origin QMAKE6)))
-HAVE_QT := $(if $(QT_QMAKE_EXPLICIT),,$(shell $(PKG_CONFIG) --exists $(QT_PREFIX)Widgets 2>/dev/null && echo 1))
+HAVE_QT := $(shell $(PKG_CONFIG) --exists $(QT_PREFIX)Widgets 2>/dev/null && echo 1)
 # Qt 6 distribution SDKs sometimes provide qmake6 but no pkg-config files.
 ifeq ($(HAVE_QT),)
 QMAKE ?= $(if $(filter 6,$(QT_VERSION)),$(QMAKE6),$(QMAKE5))
