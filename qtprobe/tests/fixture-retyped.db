@@ -1,5 +1,5 @@
 # The same name as fixture.db's longout, served by another record type after an IOC restart.
-record(ao, "$(P)retype") { field(VAL, "12.75") field(PREC, "3") field(PINI, "YES") }
+record(ai, "$(P)retype") { field(VAL, "12.75") field(PREC, "3") field(PINI, "YES") }
 # CA uses DBF_DOUBLE for both an ao and a DOUBLE waveform.
 record(waveform, "$(P)number") { field(FTVL, "DOUBLE") field(NELM, "8") }
 record(waveform, "$(P)array") { field(FTVL, "DOUBLE") field(NELM, "4") }

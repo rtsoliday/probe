@@ -826,25 +826,32 @@ private slots:
     Channel subject({prefix + "retype", "ca"}); subject.start();
     QTRY_VERIFY_WITH_TIMEOUT(subject.snapshot.hasValue, 10000);
     RecordExplorer explorer(&subject, 3); explorer.show(); explorer.setActive(true);
-    QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("RTYP"), QString("longout"), 10000);
     auto* table = explorer.findChild<QTableWidget*>("recordFields");
-    QTest::qWait(500); const int originalRows = table->rowCount(); QVERIFY(originalRows > 0);
-    bool unique = true, bounded = true;
+    auto fields = [&] {
+      QStringList out;
+      for (int row = 0; row < table->rowCount(); ++row) {
+        const auto field = table->item(row, 0)->data(Qt::UserRole + 1).toString();
+        if (!field.isEmpty()) out << field;
+      }
+      return out;
+    };
+    // Old type-specific channels must be released, not only deduplicated:
+    // ai has INP and no OUT, DOL or OMSL; longout the reverse.
+    QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("OMSL"), QString("supervisory"), 10000); QTest::qWait(200);
+    const auto longout = fields();
+    QVERIFY(longout.contains("OUT") && !longout.contains("INP"));
     for (int round = 0; round < 3; ++round) {
       for (const bool retyped : {true, false}) {
         stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog();
         launch(retyped ? QFINDTESTDATA("fixture-retyped.db") : QString());
-        QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("RTYP"), retyped ? QString("ao") : QString("longout"), 20000);
-        QTest::qWait(200);
-        QStringList fields;
-        for (int row = 0; row < table->rowCount(); ++row) {
-          const auto field = table->item(row, 0)->data(Qt::UserRole + 1).toString();
-          if (!field.isEmpty()) { unique &= !fields.contains(field); fields << field; }
-        }
-        bounded &= table->rowCount() <= originalRows + 2 && fields.contains("RTYP");
+        QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("RTYP"), retyped ? QString("ai") : QString("longout"), 20000);
+        QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("SIMM"), QString("NO"), 5000); QTest::qWait(200);
+        const auto now = fields(); auto unique = now;
+        QCOMPARE(unique.removeDuplicates(), 0);
+        if (retyped) { QVERIFY(now.contains("INP")); for (const auto* gone : {"OUT", "DOL", "OMSL"}) QVERIFY2(!now.contains(gone), gone); }
+        else QCOMPARE(now, longout);
       }
     }
-    QVERIFY(unique); QVERIFY(bounded);
   }
   void confirmationIgnoresPvaBufferGrowth() {
 #if QTPROBE_HAVE_PVA
