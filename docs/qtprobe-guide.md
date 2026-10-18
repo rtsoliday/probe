@@ -205,6 +205,14 @@ also disabled for a string that fills the 39 bytes a plain string field is
 read with (CA DBR_STRING, or QSRV), because a longer field such as `DESC` or a
 link may have been cut short; open it with `$` (for example `rec.DESC$`) to
 read and write the exact text.
+CA exposes 64-bit integer fields as doubles, so readbacks at or above 2^53 in
+magnitude may be rounded. **Readback** and **Undo** are disabled for these
+ambiguous values, including arrays, unknown record types and fields whose
+type metadata has not arrived. Identified scalar `VAL` fields of standard
+`ai`, `ao`, `calc`, `calcout` and `sub` records remain available because they
+are actual doubles. Use `pva://` for exact 64-bit integer readbacks and Undo.
+Explicit integer text, including quoted integers in JSON arrays, still writes
+exactly over CA.
 Numeric range controls initially use the IOC display limits and can be changed
 locally. Changing these limits does not modify the IOC. Controls are disabled
 when disconnected or while a write is pending. The write box and Adjust are
@@ -235,6 +243,8 @@ array (see `--max-elements`), because the full earlier value is not known, and
 after a write whose outcome is unknown, because the PV may hold either value.
 Undo is also disabled if the PV's type, scalar/array shape, state list or CA
 array capacity changes. A scalar readback cannot restore a replacement array.
+An earlier CA value that may hold a rounded 64-bit integer cannot be restored
+with Undo; the tooltip explains this limit.
 
 **Process** (the circled triangle beside Reconnect) writes 1 to the record's
 PROC field, as `caput rec.PROC 1` does. It appears for Channel Access PVs when

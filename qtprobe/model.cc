@@ -295,6 +295,22 @@ QByteArray History::csv() const {
         QString::number(s.severity) + ',' + (s.connected ? "true" : "false") + '\n';
   return text.toUtf8();
 }
+bool caIntegerReadbackMayBeRounded(const Snapshot& s, const QStringList& values) {
+  if (s.provider != "ca" || s.type != "DBF_DOUBLE") return false;
+  // These standard records' scalar VAL fields are known to be real doubles.
+  // Neither unknown/custom fields nor arrays reveal their native integer type
+  // through CA. Missing RTYP metadata must not briefly enable an unsafe Undo.
+  const auto dot = s.name.lastIndexOf('.');
+  const bool valueField = dot < 0 || s.name.mid(dot + 1) == "VAL";
+  const auto recordType = s.fields.value("RTYP");
+  if (!s.array && valueField && (recordType == "ai" || recordType == "ao" ||
+      recordType == "calc" || recordType == "calcout" || recordType == "sub")) return false;
+  for (const auto& value : values) {
+    bool ok; const double number = value.toDouble(&ok);
+    if (ok && std::abs(number) >= 9007199254740992.0) return true;
+  }
+  return false;
+}
 QStringList parseWrite(const Snapshot& s, const QString& text, QString* error) {
   error->clear();
   if (text.contains(QChar(0))) {

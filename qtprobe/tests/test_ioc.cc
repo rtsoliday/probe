@@ -715,6 +715,46 @@ private slots:
       QVERIFY(disabled); QVERIFY(refused);
     }
   }
+  void caRoundedInt64ReadbackCannotBecomeUndo() {
+    // CA presents INT64 fields as DOUBLE. 9007199254740993 reads as
+    // 9007199254740992, which would silently restore a different integer.
+    Options options;
+    Inspector integer(Address::parse(prefix + "int64"), options); integer.show();
+    auto* channel = integer.channel();
+    QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.hasValue && channel->snapshot.writable &&
+                            channel->snapshot.fields.value("RTYP") == "int64out", 10000);
+    QSignalSpy done(channel, &Channel::writeFinished);
+    channel->write("9007199254740993"); QTRY_COMPARE(done.size(), 1); QVERIFY(done[0][0].toBool());
+    QTRY_COMPARE(channel->snapshot.values.value(0), QString("9007199254740992"));
+    integer.refresh();
+    QVERIFY(!integer.findChild<QPushButton*>("useReadbackButton")->isEnabled());
+    integer.requestWrite("5"); QTRY_COMPARE(done.size(), 2); QVERIFY(done[1][0].toBool());
+    QTRY_COMPARE(channel->snapshot.number, 5.0);
+    auto* undo = integer.findChild<QPushButton*>("undoWriteButton");
+    QVERIFY(!undo->isEnabled()); QVERIFY(undo->toolTip().contains("64-bit"));
+    integer.requestUndo(); QTest::qWait(100); QCOMPARE(done.size(), 2);
+    Inspector array(Address::parse(prefix + "int64Array"), options); array.show(); auto* items = array.channel();
+    QTRY_VERIFY_WITH_TIMEOUT(items->snapshot.hasValue && items->snapshot.writable, 10000);
+    QSignalSpy itemDone(items, &Channel::writeFinished);
+    items->write("[\"9007199254740993\", \"2\"]"); QTRY_COMPARE(itemDone.size(), 1);
+    QVERIFY(itemDone[0][0].toBool()); QTRY_COMPARE(items->snapshot.values.value(0), QString("9007199254740992"));
+    array.refresh(); QVERIFY(!array.findChild<QPushButton*>("useReadbackButton")->isEnabled());
+    array.requestWrite("[5, 6]"); QTRY_COMPARE(itemDone.size(), 2); QVERIFY(itemDone[1][0].toBool());
+    QVERIFY(!array.findChild<QPushButton*>("undoWriteButton")->isEnabled());
+    array.requestUndo(); QTest::qWait(100); QCOMPARE(itemDone.size(), 2);
+    // A positively identified double VAL keeps its exact readback and Undo.
+    Inspector wide(Address::parse(prefix + "wide"), options); wide.show(); auto* real = wide.channel();
+    QTRY_VERIFY_WITH_TIMEOUT(real->snapshot.hasValue && real->snapshot.writable &&
+                            real->snapshot.fields.value("RTYP") == "ao", 10000);
+    QSignalSpy realDone(real, &Channel::writeFinished);
+    real->write("9007199254740992"); QTRY_COMPARE(realDone.size(), 1);
+    QTRY_COMPARE(real->snapshot.number, 9007199254740992.0); wide.refresh();
+    QVERIFY(wide.findChild<QPushButton*>("useReadbackButton")->isEnabled());
+    wide.requestWrite("5"); QTRY_COMPARE(realDone.size(), 2); QTRY_COMPARE(real->snapshot.number, 5.0);
+    QTRY_VERIFY(wide.findChild<QPushButton*>("undoWriteButton")->isEnabled()); wide.requestUndo();
+    QTRY_COMPARE(realDone.size(), 3); QVERIFY(realDone[2][0].toBool());
+    QTRY_COMPARE(real->snapshot.number, 9007199254740992.0);
+  }
   void cleanupTestCase() {
     stopIoc(); if (!ioc.waitForFinished(3000)) { ioc.kill(); ioc.waitForFinished(); } saveLog();
     repeater.terminate(); if (!repeater.waitForFinished(3000)) { repeater.kill(); repeater.waitForFinished(); }

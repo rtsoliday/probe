@@ -128,6 +128,9 @@ private:
 };
 // Writes use exact decimal strings. Never convert 64-bit integers through double.
 QStringList parseWrite(const Snapshot&, const QString&, QString* error);
+// CA maps 64-bit integer fields to DOUBLE, which can round their readbacks.
+// The supplied elements can also be an earlier value saved for Undo.
+bool caIntegerReadbackMayBeRounded(const Snapshot&, const QStringList&);
 // Text that parseWrite reads as enum state index: its label when that selects
 // it, else the index; empty when no text selects that state.
 QString enumWriteText(const QStringList& choices, int index);

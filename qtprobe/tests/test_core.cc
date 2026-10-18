@@ -41,6 +41,19 @@ private slots:
     s = {}; s.hasValue = s.numeric = true; s.type = "DBF_LONG"; s.precision = 3; s.values << "42"; s.number = 42;
     QCOMPARE(s.valueText(), QString("42"));
   }
+  void caIntegerRestoreRequiresExactReadback() {
+    Snapshot s; s.provider = "ca"; s.type = "DBF_DOUBLE"; s.name = "rec";
+    const QStringList large{"9007199254740992"};
+    QVERIFY(caIntegerReadbackMayBeRounded(s, large)); // RTYP has not arrived.
+    s.fields["RTYP"] = "int64out"; QVERIFY(caIntegerReadbackMayBeRounded(s, large));
+    QVERIFY(caIntegerReadbackMayBeRounded(s, {"-9007199254740992"}));
+    QVERIFY(!caIntegerReadbackMayBeRounded(s, {"9007199254740991"}));
+    s.fields["RTYP"] = "ao"; QVERIFY(!caIntegerReadbackMayBeRounded(s, large));
+    s.name = "rec.VAL"; QVERIFY(!caIntegerReadbackMayBeRounded(s, large));
+    s.name = "rec.CUSTOM"; QVERIFY(caIntegerReadbackMayBeRounded(s, large));
+    s.name = "rec"; s.array = true; QVERIFY(caIntegerReadbackMayBeRounded(s, large));
+    s.provider = "pva"; QVERIFY(!caIntegerReadbackMayBeRounded(s, large));
+  }
   void longStringsDecodeAndWrite() {
     Snapshot s; s.hasValue = s.numeric = s.array = s.bytes = true; s.provider = "ca"; s.capacity = 4; s.count = 4;
     s.values = QStringList{"104", "105", "0", "0"}; s.decodeBytes();

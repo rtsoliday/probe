@@ -546,7 +546,8 @@ void Inspector::requestUndo() {
 bool Inspector::undoCompatible(const Snapshot& s) const {
   // CA uses the same native type for scalars and arrays. Its advertised
   // capacity is authoritative; PVA's received buffer capacity is not.
-  return s.type == undoType && s.choices == undoChoices && s.array == undoArray &&
+  return !caIntegerReadbackMayBeRounded(s, undoValues) &&
+      s.type == undoType && s.choices == undoChoices && s.array == undoArray &&
       (s.provider != "ca" || s.capacity == undoCapacity);
 }
 bool Inspector::beginWrite(const QStringList& sent, const QString& after, bool ask) {
@@ -574,6 +575,7 @@ bool Inspector::beginWrite(const QStringList& sent, const QString& after, bool a
   pendingArray = s.array; pendingCapacity = s.capacity;
   pendingUndoProblem = !s.hasValue || s.values.isEmpty() ? "Undo unavailable: there was no earlier value" :
       s.truncated ? "Undo unavailable: the readback before your last write was truncated" :
+      caIntegerReadbackMayBeRounded(s, s.values) ? "Undo unavailable: CA may have rounded the earlier 64-bit integer; use pvAccess for exact values" :
       s.values.join(QString()).contains(QChar::ReplacementCharacter) ? "Undo unavailable: the earlier value holds bytes that are not UTF-8" : QString();
   return true;
 }
@@ -649,8 +651,10 @@ void Inspector::refreshWriteControls() {
       !undoUnavailable.isEmpty() ? undoUnavailable : "No write to undo yet");
   processButton->setVisible(!channel_->readOnly() && s.processable);
   processButton->setEnabled(s.connected && !channel_->writePending() && !channel_->writeUncertain());
-  useReadback->setEnabled(writable && s.readable && !s.truncated && (s.choices.isEmpty() || !s.editText().isEmpty()) && !s.editText().contains(QChar::ReplacementCharacter));
-  useReadback->setToolTip(!s.truncated ? "Copy the exact current readback into the value editor" : s.array ? "Readback is truncated; use a complete array for replacement writes." :
+  const bool roundedInteger = caIntegerReadbackMayBeRounded(s, s.values);
+  useReadback->setEnabled(writable && s.readable && !s.truncated && !roundedInteger && (s.choices.isEmpty() || !s.editText().isEmpty()) && !s.editText().contains(QChar::ReplacementCharacter));
+  useReadback->setToolTip(roundedInteger ? "CA may round 64-bit integers at or above 2^53; use pvAccess for exact Readback and Undo." :
+      !s.truncated ? "Copy the exact current readback into the value editor" : s.array ? "Readback is truncated; use a complete array for replacement writes." :
       "The server's copy fills 39 bytes and may be cut short; open the field with $ (for example rec.DESC$) for the exact text.");
   QString message, tone = "muted";
   if (channel_->readOnly()) message = "Read-only session · writes are disabled.";
