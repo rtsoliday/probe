@@ -124,6 +124,9 @@ private slots:
     QCOMPARE(parseWrite(s, "[\"18446744073709551615\"]", &error)[0], QString("18446744073709551615"));
     // JSON numbers keep their shortest exact form, so string arrays get the text that was typed.
     QCOMPARE(parseWrite(s, "[0.1, 1e-7, 3]", &error), (QStringList{"0.1", "1e-07", "3"}));
+    // Integers stay in plain digits, which integer arrays accept ("1e+06" is refused).
+    QCOMPARE(parseWrite(s, "[1000000, 1e10, -5000000]", &error), (QStringList{"1000000", "10000000000", "-5000000"}));
+    QCOMPARE(parseWrite(s, "[9007199254740991, 1.5, -0]", &error), (QStringList{"9007199254740991", "1.5", "0"}));
     for (const auto& v : parseWrite(s, "[0.1, 0.30000000000000004, 1.7976931348623157e308]", &error)) QVERIFY(QString::number(v.toDouble(), 'g', QLocale::FloatingPointShortest) == v);
     parseWrite(s, "[18446744073709551615]", &error); QVERIFY(!error.isEmpty());
     parseWrite(s, "[1,2,3,4]", &error); QVERIFY(!error.isEmpty());
