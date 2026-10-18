@@ -231,6 +231,11 @@ connected; the result is reported when the server sends it. **Reconnect** or
 unknown: inspect readback and reconnect before another write is enabled. Stop
 fields such as a motor's `STOP` are separate PVs and can be written from their
 own inspector.
+A failed CA array put may have changed earlier elements before the IOC rejected
+a later one. QtProbe requests fresh readback, reports the potentially partial
+write, disables Undo and keeps further writes disabled until **Reconnect**.
+CA array writes are not transactional; a failure does not imply that the whole
+array stayed unchanged.
 
 **Undo** writes back the exact value QtProbe last received before your last
 successful write from this inspector; its tooltip shows that value. A monitor

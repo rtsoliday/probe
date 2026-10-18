@@ -44,7 +44,7 @@ class Ca final : public Connection {
   std::vector<std::unique_ptr<Extra>> extras;
   Snapshot s;
   int limit;
-  bool dirty = true, closing = false, putDone = false, putOK = false, putUncertain = false, processing = false;
+  bool dirty = true, closing = false, putDone = false, putOK = false, putUncertain = false, processing = false, arrayPut = false;
   QString putMessage;
   void markDirty() { if (!dirty) { dirty = true; owner.requestPoll(); } }
   void fail(int status) { if (status != ECA_NORMAL) { s.error = ca_message(status); markDirty(); } }
@@ -176,9 +176,13 @@ class Ca final : public Connection {
   static void written(event_handler_args a) {
     auto c = static_cast<Ca*>(a.usr); if (!c || c->closing) return;
     c->putDone = true; c->putOK = a.status == ECA_NORMAL;
-    // A circuit lost before completion leaves the outcome unknown: the IOC may have applied it.
-    c->putUncertain = a.status == ECA_DISCONN;
-    c->putMessage = c->putOK ? (c->processing ? "Record processed" : "Write completed") : c->putUncertain ? "Disconnected during write; outcome unknown." : QString::fromLocal8Bit(ca_message(a.status));
+    // IOC array conversion is not atomic: a later invalid element can fail
+    // after earlier elements changed, without posting a value monitor.
+    c->putUncertain = a.status == ECA_DISCONN || (!c->putOK && c->arrayPut);
+    if (c->putOK) c->putMessage = c->processing ? "Record processed" : "Write completed";
+    else if (a.status == ECA_DISCONN) c->putMessage = "Disconnected during write; outcome unknown.";
+    else if (c->arrayPut) c->putMessage = QString("Array write failed and may have partially changed the PV; outcome unknown. Check readback and reconnect before retrying. (%1)").arg(ca_message(a.status));
+    else c->putMessage = QString::fromLocal8Bit(ca_message(a.status));
     c->owner.requestPoll();
   }
   static void procAccess(access_rights_handler_args a) {
@@ -222,7 +226,11 @@ public:
   }
   void poll() override {
     if (dirty) { dirty = false; owner.update(s); }
-    if (putDone) { putDone = false; owner.completeWrite(putOK, putMessage, putUncertain); }
+    if (putDone) {
+      putDone = false;
+      if (!putOK && arrayPut && s.connected) refetch();
+      owner.completeWrite(putOK, putMessage, putUncertain);
+    }
   }
   void detach() override { closing = true; }
   void refetch() override {
@@ -232,7 +240,7 @@ public:
   void process() override {
     if (!procId || ca_state(procId) != cs_conn || !ca_write_access(procId))
       throw std::runtime_error("The record's PROC field is unavailable or not writable");
-    const dbr_long_t one = 1; processing = true;
+    const dbr_long_t one = 1; processing = true; arrayPut = false;
     check(ca_array_put_callback(DBR_LONG, 1, procId, &one, written, this));
     ca_flush_io();
   }
@@ -244,6 +252,7 @@ public:
     if (quint64(values.size()) > std::numeric_limits<unsigned long>::max())
       throw std::runtime_error("Too many elements for a CA write");
     const auto count = static_cast<unsigned long>(values.size());
+    arrayPut = count > 1;
     const auto native = ca_field_type(id);
     if (native == DBF_STRING) {
       std::vector<std::array<char, MAX_STRING_SIZE>> data;

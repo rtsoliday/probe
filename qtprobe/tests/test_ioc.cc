@@ -771,6 +771,33 @@ private slots:
     QTRY_COMPARE(realDone.size(), 3); QVERIFY(realDone[2][0].toBool());
     QTRY_COMPARE(real->snapshot.number, 9007199254740992.0);
   }
+  void failedCaArrayPutMayHaveChangedElements() {
+    Options options; Inspector array(Address::parse(prefix + "int64Array"), options); array.show();
+    auto* channel = array.channel();
+    QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.hasValue && channel->snapshot.writable, 10000);
+    QSignalSpy done(channel, &Channel::writeFinished);
+    channel->write("[1, 2, 3, 4]"); QTRY_COMPARE(done.size(), 1); QVERIFY(done[0][0].toBool());
+    QTRY_COMPARE(channel->snapshot.values, (QStringList{"1", "2", "3", "4"}));
+    array.requestWrite("[10, 20, 30, 40]"); QTRY_COMPARE(done.size(), 2); QVERIFY(done[1][0].toBool());
+    QTRY_VERIFY(array.findChild<QPushButton*>("undoWriteButton")->isEnabled());
+    // The IOC converts array elements in place. The second overflows INT64,
+    // after the first has changed, and a failed conversion posts no monitor.
+    array.requestWrite("[\"42\", \"1e100\", \"3\", \"4\"]");
+    QTRY_COMPARE(done.size(), 3); QVERIFY(!done[2][0].toBool());
+    Channel fresh({prefix + "int64Array", "ca"}, true); fresh.start();
+    QTRY_COMPARE_WITH_TIMEOUT(fresh.snapshot.values, (QStringList{"42", "20", "30", "40"}), 10000);
+    qInfo() << "Stored after failed array put:" << fresh.snapshot.values << "; callback:" << done[2][1].toString();
+    QVERIFY(channel->writeUncertain()); QVERIFY(done[2][1].toString().contains("partially"));
+    QTRY_COMPARE(channel->snapshot.values, (QStringList{"42", "20", "30", "40"}));
+    QVERIFY(!array.findChild<QPushButton*>("undoWriteButton")->isEnabled());
+    array.requestUndo(); QTest::qWait(100); QCOMPARE(done.size(), 3);
+    channel->write("[1, 2, 3, 4]"); QCOMPARE(done.size(), 4); QVERIFY(!done[3][0].toBool());
+    QTest::qWait(100); QCOMPARE(fresh.snapshot.values, (QStringList{"42", "20", "30", "40"}));
+    channel->start(); QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.hasValue && channel->snapshot.writable, 10000);
+    QVERIFY(!channel->writeUncertain());
+    channel->write("[1, 2, 3, 4]"); QTRY_COMPARE(done.size(), 5); QVERIFY(done[4][0].toBool());
+    QTRY_COMPARE(fresh.snapshot.values, (QStringList{"1", "2", "3", "4"}));
+  }
   void cleanupTestCase() {
     stopIoc(); if (!ioc.waitForFinished(3000)) { ioc.kill(); ioc.waitForFinished(); } saveLog();
     repeater.terminate(); if (!repeater.waitForFinished(3000)) { repeater.kill(); repeater.waitForFinished(); }
