@@ -46,6 +46,9 @@ class Ca final : public Connection {
   int limit;
   bool dirty = true, closing = false, putDone = false, putOK = false, putUncertain = false, processing = false, arrayPut = false;
   QString putMessage;
+  // Strings of the last put: the IOC cuts them to the field size (EGU, state
+  // names) without an error, so successful string puts are read back.
+  std::vector<QByteArray> sentStrings;
   void markDirty() { if (!dirty) { dirty = true; owner.requestPoll(); } }
   void fail(int status) { if (status != ECA_NORMAL) { s.error = ca_message(status); markDirty(); } }
   static Ca* self(chid id) { return static_cast<Ca*>(ca_puser(id)); }
@@ -176,6 +179,9 @@ class Ca final : public Connection {
   }
   static void written(event_handler_args a) {
     auto c = static_cast<Ca*>(a.usr); if (!c || c->closing) return;
+    // CA answers requests on a circuit in order: the get reads what the put stored.
+    if (a.status == ECA_NORMAL && !c->processing && !c->sentStrings.empty() &&
+        ca_array_get_callback(DBR_STRING, c->sentStrings.size(), a.chid, stored, c) == ECA_NORMAL) { ca_flush_io(); return; }
     c->putDone = true; c->putOK = a.status == ECA_NORMAL;
     // IOC array conversion is not atomic: a later invalid element can fail
     // after earlier elements changed, without posting a value monitor.
@@ -185,6 +191,21 @@ class Ca final : public Connection {
     else if (c->arrayPut) c->putMessage = QString("Array write failed and may have partially changed the PV; outcome unknown. Check readback and reconnect before retrying. (%1)").arg(ca_message(a.status));
     else c->putMessage = QString::fromLocal8Bit(ca_message(a.status));
     c->owner.requestPoll();
+  }
+  static void stored(event_handler_args a) {
+    auto c = static_cast<Ca*>(a.usr); if (!c || c->closing) return;
+    c->putDone = c->putOK = true; c->putUncertain = false; c->putMessage = "Write completed";
+    if (a.status != ECA_NORMAL || !a.dbr) c->putMessage += "; the readback check failed. Check the readback.";
+    else for (long i = 0; i < std::min<long>(a.count, long(c->sentStrings.size())); ++i) {
+      const auto* text = static_cast<const char*>(a.dbr) + i * MAX_STRING_SIZE;
+      const QByteArray kept(text, int(std::find(text, text + MAX_STRING_SIZE, '\0') - text)); const auto& sent = c->sentStrings[size_t(i)];
+      if (kept.size() < sent.size() && sent.startsWith(kept)) {
+        c->putMessage += QString(", but the server kept only %1 of %2 bytes%3 (field size). Check the readback.")
+            .arg(kept.size()).arg(sent.size()).arg(c->sentStrings.size() > 1 ? QString(" in string element %1").arg(i) : QString());
+        break;
+      }
+    }
+    c->sentStrings.clear(); c->owner.requestPoll();
   }
   static void procAccess(access_rights_handler_args a) {
     auto c = self(a.chid); if (!c || c->closing) return;
@@ -241,7 +262,7 @@ public:
   void process() override {
     if (!procId || ca_state(procId) != cs_conn || !ca_write_access(procId))
       throw std::runtime_error("The record's PROC field is unavailable or not writable");
-    const dbr_long_t one = 1; processing = true; arrayPut = false;
+    const dbr_long_t one = 1; processing = true; arrayPut = false; sentStrings.clear();
     check(ca_array_put_callback(DBR_LONG, 1, procId, &one, written, this));
     ca_flush_io();
   }
@@ -253,7 +274,7 @@ public:
     if (quint64(values.size()) > std::numeric_limits<unsigned long>::max())
       throw std::runtime_error("Too many elements for a CA write");
     const auto count = static_cast<unsigned long>(values.size());
-    arrayPut = count > 1;
+    arrayPut = count > 1; sentStrings.clear();
     const auto native = ca_field_type(id);
     if (native == DBF_STRING) {
       std::vector<std::array<char, MAX_STRING_SIZE>> data;
@@ -261,6 +282,7 @@ public:
         const auto bytes = value.toUtf8();
         if (bytes.size() >= MAX_STRING_SIZE) throw std::runtime_error("CA strings must fit in 39 bytes");
         std::array<char, MAX_STRING_SIZE> item{}; std::memcpy(item.data(), bytes.constData(), bytes.size()); data.push_back(item);
+        sentStrings.push_back(bytes);
       }
       check(ca_array_put_callback(DBR_STRING, count, id, data.data(), written, this));
     } else if (native == DBF_DOUBLE || native == DBF_FLOAT) {

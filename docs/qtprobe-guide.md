@@ -291,10 +291,11 @@ typed, including `[1, 0, 2]`, is written as text. Array writes
 use JSON: `[1, 2, 3]` or `["one", "two"]`. Quote integers above 2^53−1, for
 example `["18446744073709551615"]`, to avoid JSON numeric precision loss.
 Array writes replace the value array; empty array writes are not supported.
-A pvAccess server may shorten a string or array to its field size without an
-error (QSRV keeps 39 bytes of a string field and NELM elements), so QtProbe
-reads PVA string and array writes back and the result line says when the
-server kept less than was sent. QSRV reads fields other than `VAL` (links,
+A server may shorten a string or array to its field size without an error (an
+IOC keeps 15 bytes of `EGU` and 25 of a state name; QSRV keeps 39 bytes of a
+string field and NELM elements), so QtProbe reads CA string writes and PVA
+string and array writes back, and the result line says when the server kept
+less than was sent. QSRV reads fields other than `VAL` (links,
 `DESC`) back as 39 bytes; then the result line asks you to check the field
 with `$`.
 Arbitrary PVA structures/unions are inspection only unless they contain a

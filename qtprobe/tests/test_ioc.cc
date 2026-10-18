@@ -633,6 +633,15 @@ private slots:
       input->clear(); input->setText("[7, 8, 9]"); bytes.findChild<QPushButton*>("writeButton")->click(); QTRY_COMPARE(done.size(), 1); QTRY_COMPARE(raw.snapshot.text, QString("[7, 8, 9]"));
     }
   }
+  void caServerTruncationIsReported() {
+    // The IOC cuts a CA string to the field size (EGU keeps 15 bytes) without an error; the result says so.
+    Channel egu({prefix + "number.EGU", "ca"}); egu.start(); QTRY_VERIFY_WITH_TIMEOUT(egu.snapshot.hasValue && egu.snapshot.writable, 10000);
+    QSignalSpy done(&egu, &Channel::writeFinished);
+    egu.write("milliamperes per second"); QTRY_COMPARE(done.size(), 1); QVERIFY(done[0][0].toBool());
+    QVERIFY2(done[0][1].toString().contains("kept only 15 of 23 bytes"), qPrintable(done[0][1].toString()));
+    QTRY_COMPARE(egu.snapshot.values.value(0), QString("milliamperes pe"));
+    egu.write("mA"); QTRY_COMPARE(done.size(), 2); QCOMPARE(done[1][1].toString(), QString("Write completed"));
+  }
   void pvaServerTruncationIsReported() {
 #if QTPROBE_HAVE_PVA
     // QSRV shortens strings and arrays to the field size without an error; the result says so.
