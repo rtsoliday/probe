@@ -57,6 +57,14 @@ class IocTest : public QObject {
   }
 private slots:
   void initTestCase() {
+    // Temporary settings, as in test_ui: Window and Inspector read confirmWrites, sections
+    // and zoom and write appearance and recent PVs. The qtprobe children inherit XDG_CONFIG_HOME.
+    QVERIFY(temp.isValid());
+    QCoreApplication::setOrganizationName("QtProbeTests");
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, temp.path());
+    qputenv("XDG_CONFIG_HOME", (temp.path() + "/config").toUtf8());
+    QVERIFY2(QSettings().fileName().startsWith(temp.path()), qPrintable(QSettings().fileName()));
     prefix = "QtProbeTest:" + QString::number(QCoreApplication::applicationPid()) + ':';
     artifacts = QCoreApplication::applicationDirPath() + "/test-artifacts"; QDir().mkpath(artifacts);
     int base = 20000 + int(QCoreApplication::applicationPid() % 8000) * 4;
