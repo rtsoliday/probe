@@ -848,6 +848,19 @@ private slots:
     }
     QVERIFY(unique); QVERIFY(bounded);
   }
+  void confirmationIgnoresPvaBufferGrowth() {
+#if QTPROBE_HAVE_PVA
+    // A PVA array that grows while the question is open keeps its meaning: the approved write is sent.
+    Channel other({prefix + "array", "pva"}); other.start(); QTRY_VERIFY_WITH_TIMEOUT(other.snapshot.hasValue && other.snapshot.writable, 10000);
+    QSignalSpy otherDone(&other, &Channel::writeFinished); other.write("[1, 2]"); QTRY_COMPARE(otherDone.size(), 1);
+    Options options; options.provider = "pva"; Inspector inspector(Address::parse(prefix + "array", "pva"), options); inspector.show(); auto* channel = inspector.channel();
+    QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.values.size() == 2 && channel->snapshot.writable, 10000);
+    inspector.confirm = [&](const QString&) { other.write("[1, 2, 3, 4, 5, 6, 7, 8]"); return QTest::qWaitFor([&] { return channel->snapshot.values.size() == 8; }, 5000); };
+    QSignalSpy done(channel, &Channel::writeFinished); inspector.requestWrite("[9, 10]");
+    QTRY_COMPARE(done.size(), 1); QVERIFY2(done[0][0].toBool(), qPrintable(done[0][1].toString()));
+    QTRY_COMPARE(channel->snapshot.values, (QStringList{"9", "10"}));
+#endif
+  }
   void confirmationCannotReinterpretAnEdit() {
     for (const auto& provider : providers()) {
       Options options; options.provider = provider;

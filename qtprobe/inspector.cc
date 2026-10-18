@@ -559,7 +559,9 @@ bool Inspector::beginWrite(const QStringList& sent, const QString& after, bool a
     // A modal question runs the event loop. Never reinterpret the approved
     // edit using a different type, enum list or byte/text mode afterwards.
     if (s.type != shown.type || s.choices != shown.choices || s.array != shown.array ||
-        s.bytes != shown.bytes || s.longString != shown.longString || s.capacity != shown.capacity) {
+        s.bytes != shown.bytes || s.longString != shown.longString ||
+        // CA's advertised capacity bounds the edit; PVA's received buffer capacity does not.
+        (s.provider == "ca" && s.capacity != shown.capacity)) {
       lastWriteMessage = "The PV's type, states or array format changed during confirmation; check it and enter the value again.";
       lastWriteOK = false;
       logWrite({QDateTime::currentDateTime(), s.provider + "://" + s.name, s.hasValue ? s.editText() : QString(), after, lastWriteMessage, false});
