@@ -189,7 +189,7 @@ class Ca final : public Connection {
     auto c = static_cast<Ca*>(a.usr); if (!c || c->closing) return;
     // CA answers requests on a circuit in order: the get reads what the put stored.
     if (a.status == ECA_NORMAL && !c->processing && !c->sentStrings.empty() &&
-        ca_array_get_callback(DBR_STRING, c->sentStrings.size(), a.chid, stored, c) == ECA_NORMAL) { ca_flush_io(); return; }
+        ca_array_get_callback(DBR_STRING, static_cast<unsigned long>(c->sentStrings.size()), a.chid, stored, c) == ECA_NORMAL) { ca_flush_io(); return; }
     c->putDone = true; c->putOK = a.status == ECA_NORMAL;
     // IOC array conversion is not atomic: a later invalid element can fail
     // after earlier elements changed, without posting a value monitor.
