@@ -294,7 +294,9 @@ Array writes replace the value array; empty array writes are not supported.
 A pvAccess server may shorten a string or array to its field size without an
 error (QSRV keeps 39 bytes of a string field and NELM elements), so QtProbe
 reads PVA string and array writes back and the result line says when the
-server kept less than was sent.
+server kept less than was sent. QSRV reads fields other than `VAL` (links,
+`DESC`) back as 39 bytes; then the result line asks you to check the field
+with `$`.
 Arbitrary PVA structures/unions are inspection only unless they contain a
 supported scalar/array `value` or NTEnum `value.index`.
 

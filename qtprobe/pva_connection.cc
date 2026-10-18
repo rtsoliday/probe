@@ -400,7 +400,10 @@ public:
         QString note = "Write completed";
         if (!e.ok) note += "; the readback check failed. Check the readback.";
         else if (check.text && e.storedText.size() < check.value.size() && check.value.compare(0, e.storedText.size(), e.storedText) == 0)
-          note += QString(", but the server kept only %1 of %2 bytes (field size). Check the readback.").arg(e.storedText.size()).arg(check.sent);
+          // QSRV reads fields other than VAL as 39-byte strings but stores links and DESC in full.
+          note += e.storedText.size() == 39 && address.name.contains('.') && !address.name.endsWith(".VAL")
+              ? QString(", but the readback shows only 39 of %1 bytes; plain reads of this field stop at 39 bytes, so open it with $ to check what was stored.").arg(check.sent)
+              : QString(", but the server kept only %1 of %2 bytes (field size). Check the readback.").arg(e.storedText.size()).arg(check.sent);
         else if (!check.text && e.stored < check.sent)
           note += QString(", but the server kept only %1 of %2 elements (field size). Check the readback.").arg(e.stored).arg(check.sent);
         else for (size_t i = 0; i < std::min(check.strings.size(), e.storedStrings.size()); ++i) {

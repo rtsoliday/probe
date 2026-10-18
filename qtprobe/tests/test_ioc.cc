@@ -642,6 +642,13 @@ private slots:
     text.write(QString(60, 'S')); QTRY_COMPARE(textDone.size(), 1); QVERIFY(textDone[0][0].toBool());
     QVERIFY2(textDone[0][1].toString().contains("kept only 39 of 60 bytes"), qPrintable(textDone[0][1].toString()));
     text.write("hello"); QTRY_COMPARE(textDone.size(), 2); QCOMPARE(textDone[1][1].toString(), QString("Write completed"));
+    // A link is stored in full but read back as 39 bytes: no false claim that the server cut it.
+    Channel link({prefix + "linkTarget.INPA", "pva"}); link.start(); QTRY_VERIFY_WITH_TIMEOUT(link.snapshot.hasValue && link.snapshot.writable, 10000);
+    QSignalSpy linkDone(&link, &Channel::writeFinished); const auto longLink = prefix + "this_is_a_deliberately_long_record_name NPP NMS";
+    link.write(longLink); QTRY_COMPARE(linkDone.size(), 1); QVERIFY(linkDone[0][0].toBool());
+    QVERIFY2(!linkDone[0][1].toString().contains("server kept only") && linkDone[0][1].toString().contains("open it with $"), qPrintable(linkDone[0][1].toString()));
+    Channel stored({prefix + "linkTarget.INPA$", "ca"}); stored.start(); QTRY_COMPARE_WITH_TIMEOUT(stored.snapshot.text, longLink, 10000);
+    link.write(prefix + "number NPP"); QTRY_COMPARE(linkDone.size(), 2); QVERIFY(linkDone[1][0].toBool());
     array.write("[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]"); QTRY_COMPARE(arrayDone.size(), 1); QVERIFY(arrayDone[0][0].toBool());
     QVERIFY2(arrayDone[0][1].toString().contains("kept only 8 of 10 elements"), qPrintable(arrayDone[0][1].toString()));
     Channel strings({prefix + "stringArray", "pva"}); strings.start();
