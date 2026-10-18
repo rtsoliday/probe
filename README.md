@@ -8,6 +8,46 @@ QtProbe supports Channel Access and native pvAccess, enum and numeric
 adjustments, arrays, searchable metadata, local history and plots, JSON/CSV
 export, sessions and a display-free `--info` command.
 
+## Feature highlights
+
+These screenshots show QtProbe running on macOS with Qt 6 and a local demo
+IOC. All PV names and values are demonstration data.
+
+### Monitor CA and PVA together
+
+The **All** view brings live values, units, alarm states, update ages and
+sparklines into one sortable table. Filter by name, alarms or disconnected
+PVs to find the channels that need attention.
+
+![QtProbe overview with eight CA and PVA channels, live sparklines, minor and major alarms, and a disconnected PV](docs/screenshots/qtprobe-overview.png)
+
+### Follow trends and stage adjustments
+
+Inspect the live value alongside an alarm-band range gauge, a local trend
+plot and sample statistics. The **Adjust** slider and step controls stage a
+value in the write box; **Write** sends it to the PV.
+
+![QtProbe beam-current inspector with a range gauge, trend plot, statistics, staged write value and adjustment controls](docs/screenshots/qtprobe-trend-controls.png)
+
+### Explore native pvAccess structures
+
+Browse the PVA field tree with field names, types and values, including alarm,
+display and control metadata. Search and copy fields without leaving the
+inspector. The dark appearance is shown here.
+
+![QtProbe in dark appearance with a PVA magnet-current structure expanded to show alarm, display and control metadata](docs/screenshots/qtprobe-pva-structure.png)
+
+### Find out why a record is not updating
+
+The **Record** section reads processing fields and explains common problems
+in plain language. Here it identifies a disabled record, shows the matching
+**DISA** and **DISV** values, and provides a clickable **SDIS** link to the
+disable source.
+
+![QtProbe record explorer explaining a disabled record, with DISA and DISV fields and a clickable SDIS link](docs/screenshots/qtprobe-record-diagnostics.png)
+
+## More features
+
 The window is compact and fits its content, like the original Probe. With one
 PV it shows the live value, alarm state, an inline write box and toggles for
 the Trend, Adjust, Info, Array, History and Record sections, plus Structure, a
@@ -36,6 +76,8 @@ The Help menu follows the other Qt ports: F1 Help Topics, a searchable topic
 browser, Keyboard Shortcuts, User Manual, and an animated About dialog with
 author credits. Help is embedded and works offline; `QTPROBE_HELP_PATH` can
 select an installed or site-hosted manual.
+
+## Build and run
 
 ```sh
 make -j4                         # QtProbe and legacy Probe when Motif is available
