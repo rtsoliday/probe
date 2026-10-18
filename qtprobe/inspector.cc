@@ -644,15 +644,18 @@ void Inspector::refreshWriteControls() {
   const bool ready = writable && !channel_->writePending() && !channel_->writeUncertain();
   put->setEnabled(ready); input->setEnabled(writable); enumChoice->setEnabled(writable);
   // A PV that came back with another type or state list (an IOC reboot) cannot take the saved elements.
-  const bool undoFits = !s.hasValue || undoCompatible(s);
+  const bool undoFits = !hasUndo || !s.hasValue || undoCompatible(s);
   undo->setEnabled(ready && hasUndo && undoFits);
   undo->setToolTip(hasUndo && !undoFits ? "Undo unavailable: the PV's type, states or array capacity changed since your last write" :
       hasUndo ? "Restore " + preview(undoValue) + ", the value before your last write" :
       !undoUnavailable.isEmpty() ? undoUnavailable : "No write to undo yet");
   processButton->setVisible(!channel_->readOnly() && s.processable);
   processButton->setEnabled(s.connected && !channel_->writePending() && !channel_->writeUncertain());
-  const bool roundedInteger = caIntegerReadbackMayBeRounded(s, s.values);
-  useReadback->setEnabled(writable && s.readable && !s.truncated && !roundedInteger && (s.choices.isEmpty() || !s.editText().isEmpty()) && !s.editText().contains(QChar::ReplacementCharacter));
+  // Per update, so scan elements for U+FFFD instead of serializing an array to JSON.
+  const bool roundedInteger = writable && caIntegerReadbackMayBeRounded(s, s.values);
+  const bool replacement = s.longString ? s.text.contains(QChar::ReplacementCharacter) : !s.array ? s.editText().contains(QChar::ReplacementCharacter) :
+      std::any_of(s.values.cbegin(), s.values.cend(), [](const QString& v) { return v.contains(QChar::ReplacementCharacter); });
+  useReadback->setEnabled(writable && s.readable && !s.truncated && !roundedInteger && (s.choices.isEmpty() || !s.editText().isEmpty()) && !replacement);
   useReadback->setToolTip(roundedInteger ? "CA may round 64-bit integers at or above 2^53; use pvAccess for exact Readback and Undo." :
       !s.truncated ? "Copy the exact current readback into the value editor" : s.array ? "Readback is truncated; use a complete array for replacement writes." :
       "The server's copy fills 39 bytes and may be cut short; open the field with $ (for example rec.DESC$) for the exact text.");

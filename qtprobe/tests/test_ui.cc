@@ -397,6 +397,17 @@ private slots:
     Snapshot s = inspector.channel()->snapshot; s.connected = s.readable = s.writable = true; s.type = "DBF_ENUM"; s.choices = QStringList{"Off", "On"};
     inspector.channel()->update(s); inspector.refresh(); QCOMPARE(inspector.findChild<QComboBox*>("enumChoice")->currentIndex(), -1);
   }
+  void readbackGatingForArraysAndText() {
+    // Readback stays off for bytes that were not UTF-8 (U+FFFD) in arrays and long strings, and on otherwise.
+    Options options; options.connectOnOpen = false; Inspector inspector(Address::parse("R:wave"), options);
+    auto* readback = inspector.findChild<QPushButton*>("useReadbackButton");
+    Snapshot s = inspector.channel()->snapshot; s.connected = s.readable = s.writable = s.hasValue = s.array = true; s.type = "DBF_STRING"; s.count = s.capacity = 2;
+    auto show = [&](QStringList values) { s.values = values; ++s.sequence; inspector.channel()->update(s); inspector.refresh(); return readback->isEnabled(); };
+    QVERIFY(show({"a", "b"})); QVERIFY(!show({"a", QString("b") + QChar(QChar::ReplacementCharacter)}));
+    s.type = "DBF_DOUBLE"; s.numeric = true; QVERIFY(show({"1", "2.5"}));
+    s.array = false; s.numeric = false; s.type = "DBF_CHAR"; s.bytes = true; s.longString = true; s.count = s.capacity = 8;
+    QVERIFY(show({"111", "107", "0"})); QVERIFY(inspector.channel()->snapshot.longString);
+  }
   void confirmationShowsWhatIsSent() {
     // The question names enum states by label and counts array elements.
     Options options; options.connectOnOpen = false; Inspector inspector(Address::parse("C:gain"), options); inspector.show();
