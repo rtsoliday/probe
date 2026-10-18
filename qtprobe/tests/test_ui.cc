@@ -486,6 +486,46 @@ private slots:
     QVERIFY(tree->topLevelItem(1)->isExpanded()); QVERIFY(!tree->topLevelItem(3)->isExpanded());
     QSettings().setValue("sections", 0);
   }
+  void structureBrowserForgetsRemovedFields() {
+    StructureBrowser browser; browser.controls()->setParent(&browser);
+    auto* tree = browser.findChild<QTreeWidget*>("structureFields");
+    auto schema = [](const QString& name) {
+      auto root = std::make_shared<FieldNode>(); root->kind = FieldNode::Structure;
+      for (const auto& field : {QString("persistent"), name}) {
+        FieldNode branch; branch.kind = FieldNode::Structure; branch.name = field;
+        FieldNode value; value.name = "value"; value.type = "double"; value.value = "1";
+        branch.children << value; root->children << branch;
+      }
+      return root;
+    };
+    browser.setTree(schema("retired"));
+    tree->topLevelItem(0)->setExpanded(false); tree->topLevelItem(1)->setExpanded(false);
+    // Keep a surviving field's choice while repeatedly replacing the other field.
+    for (int round = 0; round < 100; ++round) {
+      browser.setTree(schema(QString("shape%1").arg(round)));
+      QVERIFY(!tree->topLevelItem(0)->isExpanded()); QVERIFY(tree->topLevelItem(1)->isExpanded());
+      tree->topLevelItem(1)->setExpanded(false);
+    }
+    // Removed paths use their defaults if they return, including old schema variants.
+    for (int round = 0; round < 100; ++round) {
+      browser.setTree(schema(QString("shape%1").arg(round)));
+      QVERIFY(!tree->topLevelItem(0)->isExpanded()); QVERIFY(tree->topLevelItem(1)->isExpanded());
+    }
+    browser.setTree(schema("retired")); QVERIFY(tree->topLevelItem(1)->isExpanded());
+    // Search expansion is temporary, even across schema changes.
+    auto* filter = browser.controls()->findChild<QLineEdit*>("structureFilter"); filter->setText("value");
+    QVERIFY(tree->topLevelItem(0)->isExpanded());
+    browser.setTree(schema("last")); filter->clear();
+    QVERIFY(!tree->topLevelItem(0)->isExpanded()); QVERIFY(tree->topLevelItem(1)->isExpanded());
+    // Hiding the section preserves choices for the current schema.
+    tree->topLevelItem(1)->setExpanded(false); browser.release(); QVERIFY(browser.empty());
+    browser.setTree(schema("last"));
+    QVERIFY(!tree->topLevelItem(0)->isExpanded()); QVERIFY(!tree->topLevelItem(1)->isExpanded());
+    // An empty schema removes all fields and their remembered choices.
+    auto empty = std::make_shared<FieldNode>(); empty->kind = FieldNode::Structure;
+    browser.setTree(empty); QVERIFY(browser.empty()); browser.setTree(schema("last"));
+    QVERIFY(tree->topLevelItem(0)->isExpanded()); QVERIFY(tree->topLevelItem(1)->isExpanded());
+  }
   void arraysHaveNoTrend() {
     // Element 0 over time is not a trend of an array or a text waveform; Array shows them.
     QSettings().setValue("sections", int(TrendSection | ArraySection));

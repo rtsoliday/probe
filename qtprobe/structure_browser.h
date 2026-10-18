@@ -33,7 +33,7 @@ private:
   QLabel* summary;
   QTreeWidget* view;
   FieldTree tree;
-  // Expansion by path: the default the first time a field appears, then the user's.
+  // Expansion by path for the current schema, also kept while the section is hidden.
   QHash<QString, bool> open;
   // Values at the previous update, to mark what changed.
   QHash<QString, QString> previous, latest;

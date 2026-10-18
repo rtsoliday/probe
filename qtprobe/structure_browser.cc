@@ -136,6 +136,11 @@ void StructureBrowser::setTree(const FieldTree& next) {
   sync(view->invisibleRootItem(), *tree, {}, -1);
   view->setUpdatesEnabled(true); applying = false;
   previous.swap(latest);
+  // Retain expansion only for fields in the current schema.
+  for (auto it = open.begin(); it != open.end();) {
+    if (!previous.contains(it.key())) it = open.erase(it);
+    else ++it;
+  }
   const int fields = countFields(*tree);
   QString text = QString("%1 field%2").arg(fields).arg(fields == 1 ? "" : "s");
   if (!tree->type.isEmpty() && tree->type != "structure") text = tree->type + " · " + text;

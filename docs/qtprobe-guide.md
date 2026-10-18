@@ -299,10 +299,13 @@ alarm's severity and message, a time stamp in UTC, or the field's own `value`.
 
 Normative-type metadata (`alarm`, `timeStamp`, `display`, `control`,
 `valueAlarm`) starts collapsed; other structures start open. Expanding and
-collapsing is remembered per field while the PV is open, and updates change
-values in place, so the tree does not jump or close as data arrives. A value
-that changed in the latest update is shown in the accent color; a collapsed
-field shows its name in the accent color when something inside it changed.
+collapsing is remembered for fields in the current structure while the PV is
+open, including when the section is hidden. Fields removed by a schema change
+are forgotten so this state stays bounded; if they return, they use the defaults
+above. Updates change values in place, so the tree does not jump or close as
+data arrives. A value that changed in the latest update is shown in the accent
+color; a collapsed field shows its name in the accent color when something
+inside it changed.
 
 The search box matches field paths, types and values. Matching fields are
 shown with their contents and the structures that contain them; clearing the
