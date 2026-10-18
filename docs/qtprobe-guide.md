@@ -212,13 +212,14 @@ ambiguous values, including arrays, unknown record types and fields whose
 type metadata has not arrived. Identified scalar `VAL` fields of standard
 `ai`, `ao`, `calc`, `calcout` and `sub` records remain available because they
 are actual doubles. Use `pva://` for exact 64-bit integer readbacks and Undo.
-Explicit integer text, including quoted integers in JSON arrays, still writes
-exactly over CA.
+Explicit integer text, including quoted integers in JSON arrays, writes
+exactly over CA only when QtProbe is connected to the IOC itself (see the CA
+gateway note below).
 Numeric range controls initially use the IOC display limits and can be changed
 locally. Changing these limits does not modify the IOC. Controls are disabled
 when disconnected or while a write is pending. The write box and Adjust are
 hidden in a read-only session and for PVs the server reports as not writable;
-they stay in place during a disconnect. The IOC remains authoritative for
+they stay in place during a disconnect. The server (IOC or gateway) remains authoritative for
 access and accepted limits. Write results and errors appear on the line below
 the box. Adjust has Min, Max and Step fields, a slider between − and + step
 buttons, and **Dial** reveals the optional dial. CA writes and Process use a
@@ -278,7 +279,15 @@ sent as integer text that the IOC parses for the field's own type, exactly or
 rejected as out of range. Other CA array elements, and negative values written
 to unsigned fields (as with `caput`), are converted by the IOC without a range
 check; use `pva://` for exact type checks. A CA readback of a 64-bit field
-beyond 2^53 is rounded, so use `pva://` to read it exactly. Numeric
+beyond 2^53 is rounded, so use `pva://` to read it exactly.
+**Through a CA gateway** (ca-gateway or another server that relays CA), the
+gateway converts each CA write to the type it reports for the field before the
+IOC sees it: DOUBLE for 64-bit integer fields, LONG for USHORT. Integer text is
+then not parsed by the IOC: values beyond 2^53 are rounded, values of 2^63 or
+more in magnitude can be stored as the most negative 64-bit integer, and
+USHORT and ULONG fields are not range checked, while the result still reads
+"Write completed". Write 64-bit and unsigned integer fields with `pva://`
+when CA goes through a gateway. Numeric
 adjustments are disabled for 64-bit integers beyond the exact range of double;
 use the native value editor for those values. Hexadecimal
 integers can use `0x`. Floating-point writes must be finite. Enum writes accept
