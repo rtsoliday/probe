@@ -206,7 +206,9 @@ also disabled for a string that fills the 39 bytes a plain string field is
 read with (CA DBR_STRING, or QSRV), because a longer field such as `DESC` or a
 link may have been cut short; open it with `$` (for example `rec.DESC$`) to
 read and write the exact text. Over pvAccess, QSRV refuses writes to link
-fields through `$`; write links over CA.
+fields through `$`; write links over CA. Readback is also disabled for text
+holding bytes that are not UTF-8 (shown as U+FFFD), which Write refuses because
+they cannot be written back exactly.
 CA exposes 64-bit integer fields as doubles, so readbacks at or above 2^53 in
 magnitude may be rounded. **Readback** and **Undo** are disabled for these
 ambiguous values, including arrays, unknown record types and fields whose
@@ -254,12 +256,15 @@ by others since then; the confirmation's current value is that same value. Undo 
 write, so pressing it again restores the value it replaced. Undo sends the
 saved elements as they were received, so enum states and byte arrays are
 restored exactly. It is unavailable after a write that replaced a truncated
-array (see `--max-elements`), because the full earlier value is not known, and
-after a write whose outcome is unknown, because the PV may hold either value.
+array (see `--max-elements`) or a plain string that filled 39 bytes, because
+the full earlier value is not known; after a write that replaced text holding
+bytes that are not UTF-8, because those bytes cannot be written back exactly;
+and after a write whose outcome is unknown, because the PV may hold either value.
 Undo is also disabled if the PV's type, scalar/array shape, state list or CA
 array capacity changes. A scalar readback cannot restore a replacement array.
 An earlier CA value that may hold a rounded 64-bit integer cannot be restored
-with Undo; the tooltip explains this limit.
+with Undo, including while the record type is not yet known after a reconnect;
+the tooltip explains this limit.
 
 **Process** (the circled triangle beside Reconnect) writes 1 to the record's
 PROC field, as `caput rec.PROC 1` does. It appears for Channel Access PVs when

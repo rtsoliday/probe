@@ -941,6 +941,13 @@ private slots:
     QTRY_VERIFY(wide.findChild<QPushButton*>("undoWriteButton")->isEnabled()); wide.requestUndo();
     QTRY_COMPARE(realDone.size(), 3); QVERIFY(realDone[2][0].toBool());
     QTRY_COMPARE(real->snapshot.number, 9007199254740992.0);
+    // After Reconnect the value can arrive before RTYP: Undo is refused, and
+    // its tooltip names the rounding limit, not a type change.
+    wide.requestWrite("6"); QTRY_COMPARE(realDone.size(), 4); QTRY_COMPARE(real->snapshot.number, 6.0);
+    auto pending = real->snapshot; pending.fields.remove("RTYP"); real->update(pending); wide.refresh();
+    auto* wideUndo = wide.findChild<QPushButton*>("undoWriteButton");
+    QVERIFY(!wideUndo->isEnabled()); QVERIFY2(wideUndo->toolTip().contains("64-bit"), qPrintable(wideUndo->toolTip()));
+    wide.requestUndo(); QTest::qWait(100); QCOMPARE(realDone.size(), 4);
   }
   void failedCaArrayPutMayHaveChangedElements() {
     Options options; Inspector array(Address::parse(prefix + "int64Array"), options); array.show();
