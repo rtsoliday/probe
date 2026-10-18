@@ -617,10 +617,17 @@ private slots:
     QDir().mkpath(QCoreApplication::applicationDirPath() + "/test-artifacts"); QVERIFY(log->grab().save(QCoreApplication::applicationDirPath() + "/test-artifacts/write-log.png"));
     // Confirmation: answering No sends and logs nothing.
     window.findChild<QAction*>("confirmWritesAction")->setChecked(true); QVERIFY(QSettings().value("confirmWrites").toBool());
-    QString question;
-    QTimer::singleShot(0, [&] { auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget()); if (!box) return; question = box->text(); box->button(QMessageBox::No)->click(); });
+    QString question; Qt::TextFormat format = Qt::AutoText;
+    auto answerNo = [&] { auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget()); if (!box) return; question = box->text(); format = box->textFormat(); box->button(QMessageBox::No)->click(); };
+    QTimer::singleShot(0, answerNo);
     inspector->requestWrite("76"); QVERIFY(question.contains("Write 76 to G:one")); QVERIFY(question.contains("Current value: 70"));
-    QCOMPARE(writeLog().size(), size_t(1));
+    QCOMPARE(writeLog().size(), size_t(1)); QCOMPARE(format, Qt::PlainText);
+    // Markup in a value is shown literally, exactly as it would be sent.
+    window.addPv("ca://G:text"); auto* text = inspectorAt(window, 1); auto t = text->channel()->snapshot;
+    t.connected = t.readable = t.writable = t.hasValue = true; t.type = "DBF_STRING"; t.values = QStringList{"<b>old</b>"}; t.count = 1; t.sequence = 1;
+    text->channel()->update(t); text->refresh(); format = Qt::AutoText; QTimer::singleShot(0, answerNo);
+    text->requestWrite("<s>9</s> 1 < 2"); QVERIFY2(question.contains("<s>9</s> 1 < 2") && question.contains("<b>old</b>"), qPrintable(question));
+    QCOMPARE(format, Qt::PlainText); QCOMPARE(writeLog().size(), size_t(1)); window.closePv(1);
     window.findChild<QAction*>("confirmWritesAction")->setChecked(false);
     log->findChild<QPushButton*>("clearWriteLog")->click(); QVERIFY(writeLog().empty()); QCOMPARE(log->findChild<QTableWidget*>("writeLogTable")->rowCount(), 0);
     // Not a scalar in range: no gauge.

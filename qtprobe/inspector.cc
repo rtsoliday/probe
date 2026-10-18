@@ -1026,7 +1026,8 @@ void Window::connectInspector(Inspector* inspector) {
   inspector->confirm = [this](const QString& question) {
     if (!confirmWrites) return true;
     QMessageBox box(QMessageBox::Question, "Confirm write", question, QMessageBox::Yes | QMessageBox::No, this);
-    box.setObjectName("confirmWriteDialog"); box.setPalette(palette()); box.setDefaultButton(QMessageBox::No);
+    // Values are shown exactly as sent; rich text would render markup in them.
+    box.setObjectName("confirmWriteDialog"); box.setTextFormat(Qt::PlainText); box.setPalette(palette()); box.setDefaultButton(QMessageBox::No);
     return box.exec() == QMessageBox::Yes;
   };
 }
