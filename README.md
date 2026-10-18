@@ -145,9 +145,9 @@ An already-configured MSVC shell can also run GNU Make directly with
 `OS=Windows ARCH=x86_64 QT_DIR=... EPICS_BASE=... EPICS_HOST_ARCH=windows-x64`
 and `SHELL=C:/cygwin64/bin/sh.exe`, with Cygwin utilities after the MSVC tools
 in `PATH`.
-On macOS the same `make qtprobe` applies: Qt is found with `pkg-config` or
-`QMAKE6=/path/to/qmake6` (for example Homebrew's), `EPICS_HOST_ARCH` defaults to
-`darwin-aarch64` or `darwin-x86`, and the executable is
+On macOS the same `make qtprobe` applies: Qt is found with the `pkg-config`
+on `PATH` (Homebrew's Qt installs its `.pc` files), `EPICS_HOST_ARCH` defaults
+to `darwin-aarch64` or `darwin-x86`, and the executable is
 `bin/Darwin-<arch>/qtprobe`. The macOS build compiles without warnings with
 Qt 6; its test results are not recorded for 0.1.0.
 The legacy program requires Unix/X11. Qt runtime deployment uses `windeployqt`
