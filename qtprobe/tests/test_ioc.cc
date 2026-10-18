@@ -520,6 +520,16 @@ private slots:
     QTRY_COMPARE(wide.snapshot.count, quint64(4));
     QCOMPARE(wide.snapshot.values.mid(1), (QStringList{"1e-100", "-1e-100", "1.5"}));
   }
+  void caTextPathRefusesSubnormalPeers() {
+    // The IOC would reject a subnormal text element part-way through the array.
+    Channel wide({prefix + "array", "ca"}); wide.start(); QTRY_VERIFY_WITH_TIMEOUT(wide.snapshot.hasValue && wide.snapshot.writable, 10000);
+    QSignalSpy done(&wide, &Channel::writeFinished);
+    wide.write("[1, 2, 3, 4]"); QTRY_COMPARE(done.size(), 1); QVERIFY(done[0][0].toBool()); QTRY_COMPARE(wide.snapshot.values, (QStringList{"1", "2", "3", "4"}));
+    wide.write("[\"1e20\", \"1e-310\", 30, 40]"); QTRY_COMPARE(done.size(), 2); QVERIFY(!done[1][0].toBool()); QVERIFY(!wide.writeUncertain());
+    QTest::qWait(300); QCOMPARE(wide.snapshot.values, (QStringList{"1", "2", "3", "4"}));
+    wide.write("[\"1e20\", \"1e-300\", 30, 40]"); QTRY_COMPARE(done.size(), 3); QVERIFY(done[2][0].toBool());
+    QTRY_COMPARE(wide.snapshot.values, (QStringList{"1e+20", "1e-300", "30", "40"}));
+  }
   void caUInt64IntegerTextIsDecimal() {
     // UINT64 fields parse text with base 0; integer text keeps its decimal value.
     Channel ca({prefix + "uint64Array", "ca"}); ca.start(); QTRY_VERIFY_WITH_TIMEOUT(ca.snapshot.hasValue && ca.snapshot.writable, 10000);

@@ -281,6 +281,10 @@ public:
         std::vector<std::array<char, MAX_STRING_SIZE>> text;
         for (int i = 0; i < values.size(); ++i) {
           auto trimmed = values[i].trimmed(); const double number = data[size_t(i)];
+          // IOC text parsers reject subnormal values (ERANGE) after converting the
+          // elements before them; refuse before anything is sent.
+          if (number != 0 && std::abs(number) < std::numeric_limits<double>::min())
+            throw std::runtime_error("Subnormal values cannot be written over CA together with values of 2^53 or more; write them separately or use pva://");
           // The IOC parses UINT64 text with base 0, where a leading zero selects
           // octal ("010" would store 8): send integers without leading zeros.
           const int start = trimmed.startsWith('+') || trimmed.startsWith('-') ? 1 : 0;
