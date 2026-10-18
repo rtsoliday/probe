@@ -10,6 +10,7 @@
 #include <QJsonObject>
 #include <QTcpServer>
 #include <QUdpSocket>
+#include <cadef.h>
 #include <clocale>
 #include <cmath>
 #include <string>
@@ -35,7 +36,7 @@ class IocTest : public QObject {
 #endif
     return p;
   }
-  void launch(const QString& database = {}) {
+  void launch(const QString& database = {}, bool settle = true) {
     const QString executable = QString(EPICS_TEST_BIN) +
 #if QTPROBE_HAVE_PVA
         "/softIocPVA";
@@ -48,7 +49,7 @@ class IocTest : public QObject {
     ioc.setProcessChannelMode(QProcess::MergedChannels);
     ioc.start(executable, {"-m", "P=" + prefix, "-a", acf, "-d", db});
     QVERIFY2(ioc.waitForStarted(5000), qPrintable(ioc.errorString()));
-    QTest::qWait(300);
+    if (settle) QTest::qWait(300);
     QVERIFY2(ioc.state() == QProcess::Running, ioc.readAll().constData());
   }
   void saveLog() {
@@ -788,6 +789,28 @@ private slots:
     QTRY_VERIFY_WITH_TIMEOUT(channel->snapshot.connected && channel->snapshot.hasValue && channel->snapshot.type == "DBF_DOUBLE", 20000);
     inspector.refresh(); QVERIFY(!undo->isEnabled()); QVERIFY(undo->toolTip().contains("type"));
     stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch();
+  }
+  void writeRefusedBeforeTypeChangeIsDelivered() {
+    // Text is parsed for the delivered snapshot. When the GUI thread stays in the CA pump
+    // while the PV returns with another type, the write must not be encoded for that type.
+    Channel c({prefix + "retype", "ca"}); c.start();
+    QTRY_VERIFY_WITH_TIMEOUT(c.snapshot.hasValue && c.snapshot.writable && c.snapshot.type == "DBF_LONG", 10000);
+    chid observer = nullptr;
+    QCOMPARE(ca_create_channel((prefix + "retype").toLatin1().constData(), nullptr, nullptr, 0, &observer), ECA_NORMAL);
+    QTRY_VERIFY_WITH_TIMEOUT(ca_state(observer) == cs_conn, 10000);
+    // No Qt events from here to the write: the channel's 25 ms delivery cannot run.
+    stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog(); launch(QFINDTESTDATA("fixture-retyped.db"), false);
+    QElapsedTimer elapsed; elapsed.start();
+    while (!(ca_state(observer) == cs_conn && ca_field_type(observer) == DBF_DOUBLE) && elapsed.elapsed() < 25000) { ca_poll(); QThread::msleep(2); }
+    for (int i = 0; i < 100; ++i) { ca_poll(); QThread::msleep(2); }
+    const bool stale = ca_field_type(observer) == DBF_DOUBLE && c.snapshot.type == "DBF_LONG";
+    QSignalSpy done(&c, &Channel::writeFinished); c.write("7");
+    const auto result = done.isEmpty() ? QString("sent") : done.at(0).at(1).toString();
+    ca_clear_channel(observer);
+    QTRY_VERIFY_WITH_TIMEOUT(c.snapshot.connected && c.snapshot.type == "DBF_DOUBLE", 10000);
+    QTest::qWait(200); const auto after = c.snapshot.values.value(0);
+    stopIoc(); ioc.waitForFinished(5000); saveLog(); launch();  // before the checks, so later tests keep their IOC
+    QVERIFY(stale); QVERIFY2(result.contains("changed"), qPrintable(result)); QCOMPARE(after, QString("12.75"));
   }
   void recordFieldsStayUniqueAcrossTypeChanges() {
     Channel subject({prefix + "retype", "ca"}); subject.start();

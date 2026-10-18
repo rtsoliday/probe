@@ -282,6 +282,12 @@ public:
     const auto count = static_cast<unsigned long>(values.size());
     arrayPut = count > 1; sentStrings.clear();
     const auto native = ca_field_type(id);
+    // The values were parsed for the snapshot last delivered to the channel.
+    // A reconnect (another record type) or new states not yet delivered there
+    // would give them another meaning.
+    const auto& shown = owner.snapshot;
+    if (shown.type != dbf_type_to_text(native) || shown.capacity != ca_element_count(id) || shown.choices != s.choices)
+      throw std::runtime_error("The PV's type, size or states changed before the write was sent; check it and enter the value again.");
     if (native == DBF_STRING) {
       std::vector<std::array<char, MAX_STRING_SIZE>> data;
       for (const auto& value : values) {
