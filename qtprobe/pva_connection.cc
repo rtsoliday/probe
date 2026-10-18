@@ -387,7 +387,8 @@ public:
           putStructure = e.structure;
           const auto data = pvd::getPVDataCreate()->createPVStructure(putStructure);
           auto value = data->getSubField("value");
-          if (value && value->getField()->getType() == pvd::structure) value = data->getSubField("value.index");
+          // Only an NTEnum-style int index is writable, as extract() shows it as an enum.
+          if (value && value->getField()->getType() == pvd::structure) value = data->getSubField<pvd::PVInt>("value.index");
           s.writable = value && (value->getField()->getType() == pvd::scalar || value->getField()->getType() == pvd::scalarArray) && channel->getAccessRights(value) == pva::readWrite;
         } else { s.writable = false; s.fields["Write setup"] = e.message; }
         break;
@@ -429,7 +430,7 @@ public:
       throw std::runtime_error("PVA write operation unavailable");
     auto data = pvd::getPVDataCreate()->createPVStructure(putStructure);
     auto value = data->getSubField("value");
-    if (value && value->getField()->getType() == pvd::structure) value = data->getSubField("value.index");
+    if (value && value->getField()->getType() == pvd::structure) value = data->getSubField<pvd::PVInt>("value.index");
     Check next;
     if (auto scalar = std::dynamic_pointer_cast<pvd::PVScalar>(value)) {
       const auto type = scalar->getScalar()->getScalarType();

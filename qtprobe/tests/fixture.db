@@ -21,6 +21,7 @@ record(waveform, "$(P)int64Array") { field(FTVL, "INT64") field(NELM, "4") }
 record(waveform, "$(P)uint64Array") { field(FTVL, "UINT64") field(NELM, "4") }
 record(mbbo, "$(P)unsignedFields") { field(ZRST, "a") }
 record(calc, "$(P)linkTarget") { field(INPA, "$(P)number NPP") field(CALC, "A") }
+record(ao, "$(P)groupIndexTarget") { field(VAL, "1") info(Q:group, {"$(P)groupIndex": {"value.index": {"+channel": "VAL", "+type": "plain", "+putorder": 0}}}) }
 record(waveform, "$(P)stringArray") { field(FTVL, "STRING") field(NELM, "2") }
 record(ao, "$(P)protected") { field(VAL, "7") field(ASG, "READONLY") }
 record(ao, "$(P)longdesc") { field(DESC, "0123456789012345678901234567890123456789") }

@@ -554,6 +554,18 @@ private slots:
     QTRY_COMPARE(link.snapshot.text, target);
     link.write(prefix + "number NPP"); QTRY_COMPARE(done.size(), 2); QVERIFY(done[1][0].toBool()); QTRY_COMPARE(link.snapshot.text, prefix + "number NPP NMS");
   }
+  void pvaNonEnumIndexStructureIsInspectionOnly() {
+#if QTPROBE_HAVE_PVA
+    // A structure value whose "index" is not an int is not an NTEnum: no write box, no put.
+    Channel g({prefix + "groupIndex", "pva"}); g.start(); QTRY_VERIFY_WITH_TIMEOUT(g.snapshot.connected && g.snapshot.hasValue, 10000);
+    QTest::qWait(1000); QVERIFY(!g.snapshot.writable); QVERIFY(g.snapshot.type != "enum");
+    QSignalSpy done(&g, &Channel::writeFinished); g.write("7"); QTRY_COMPARE(done.size(), 1); QVERIFY(!done[0][0].toBool());
+    Channel target({prefix + "groupIndexTarget", "ca"}); target.start(); QTRY_VERIFY_WITH_TIMEOUT(target.snapshot.hasValue, 10000);
+    QTest::qWait(300); QCOMPARE(target.snapshot.number, 1.0);
+    // A real NTEnum stays writable.
+    Channel e({prefix + "enum", "pva"}); e.start(); QTRY_VERIFY_WITH_TIMEOUT(e.snapshot.hasValue && e.snapshot.writable, 10000);
+#endif
+  }
   void caTextPathRefusesSubnormalPeers() {
     // The IOC would reject a subnormal text element part-way through the array.
     Channel wide({prefix + "array", "ca"}); wide.start(); QTRY_VERIFY_WITH_TIMEOUT(wide.snapshot.hasValue && wide.snapshot.writable, 10000);
