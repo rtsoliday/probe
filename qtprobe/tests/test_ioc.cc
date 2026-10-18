@@ -357,7 +357,7 @@ private slots:
     for (const char* option : {"-help", "-version"}) {
       process.start(exe, {option}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitStatus(), QProcess::NormalExit); QCOMPARE(process.exitCode(), 0);
     }
-    // The shipped version (main.cc) must match the About fallback, guide and README checked in test_ui.
+    // The shipped version (main.cc) must match the About fallback and guide checked in test_ui.
     process.start(exe, {"--version"}); QVERIFY(process.waitForFinished(5000));
     QCOMPARE(process.readAllStandardOutput().trimmed(), QByteArray("qtprobe 0.1.0"));
     process.setProcessEnvironment(env);
@@ -572,7 +572,7 @@ private slots:
     integer.write("2147483647"); QTRY_COMPARE(i.size(), 3); QVERIFY(i[2][0].toBool());  // shared fixture value
   }
   void caRejectedWriteStaysDefinite() {
-    // A put the IOC refuses while connected (DISP=1) is a definite failure: no lock, Undo unaffected.
+    // A put the IOC refuses while connected (DISP=1) is a definite failure: writes stay enabled.
     Channel c({prefix + "putDisabled", "ca"}); c.start(); QTRY_VERIFY_WITH_TIMEOUT(c.snapshot.hasValue && c.snapshot.writable, 10000);
     QSignalSpy done(&c, &Channel::writeFinished);
     c.write("1"); QTRY_COMPARE(done.size(), 1); QVERIFY(!done[0][0].toBool()); QVERIFY2(!c.writeUncertain(), qPrintable(done[0][1].toString()));
@@ -582,10 +582,15 @@ private slots:
     // Link fields opened with $ take their exact text over CA; a refused link changes nothing and locks nothing.
     Channel link({prefix + "linkTarget.INPA$", "ca"}); link.start(); QTRY_VERIFY_WITH_TIMEOUT(link.snapshot.hasValue && link.snapshot.writable, 10000);
     QSignalSpy done(&link, &Channel::writeFinished);
-    const auto target = prefix + "number.VAL CP MS";  // longer than 39 bytes with the test prefix
+    const auto target = prefix + "groupIndexTarget.VAL CP MS";  // beyond the 39 bytes of a plain string
+    QVERIFY(target.toUtf8().size() > 39);
     link.write(target); QTRY_COMPARE(done.size(), 1); QVERIFY2(done[0][0].toBool(), qPrintable(done[0][1].toString())); QVERIFY(!link.writeUncertain());
     QTRY_COMPARE(link.snapshot.text, target);
-    link.write(prefix + "number NPP"); QTRY_COMPARE(done.size(), 2); QVERIFY(done[1][0].toBool()); QTRY_COMPARE(link.snapshot.text, prefix + "number NPP NMS");
+    link.write("#C1 S2"); QTRY_COMPARE(done.size(), 2);  // a hardware address the soft calc refuses
+    QVERIFY(!done[1][0].toBool()); QVERIFY(!link.writeUncertain());
+    QTest::qWait(200); QCOMPARE(link.snapshot.text, target);
+    done.clear();
+    link.write(prefix + "number NPP"); QTRY_COMPARE(done.size(), 1); QVERIFY(done[0][0].toBool()); QTRY_COMPARE(link.snapshot.text, prefix + "number NPP NMS");
   }
   void pvaNonEnumIndexStructureIsInspectionOnly() {
 #if QTPROBE_HAVE_PVA
@@ -597,6 +602,8 @@ private slots:
     QTest::qWait(300); QCOMPARE(target.snapshot.number, 1.0);
     // A real NTEnum stays writable.
     Channel e({prefix + "enum", "pva"}); e.start(); QTRY_VERIFY_WITH_TIMEOUT(e.snapshot.hasValue && e.snapshot.writable, 10000);
+#else
+    QSKIP("Built without pvAccess");
 #endif
   }
   void caTextPathRefusesSubnormalPeers() {
@@ -816,10 +823,10 @@ private slots:
     QSignalSpy done(&c, &Channel::writeFinished); c.write("7");
     const auto result = done.isEmpty() ? QString("sent") : done.at(0).at(1).toString();
     ca_clear_channel(observer);
-    QTRY_VERIFY_WITH_TIMEOUT(c.snapshot.connected && c.snapshot.type == "DBF_DOUBLE", 10000);
+    const bool back = QTest::qWaitFor([&] { return c.snapshot.connected && c.snapshot.type == "DBF_DOUBLE"; }, 10000);
     QTest::qWait(200); const auto after = c.snapshot.values.value(0);
     stopIoc(); ioc.waitForFinished(5000); saveLog(); launch();  // before the checks, so later tests keep their IOC
-    QVERIFY(stale); QVERIFY2(result.contains("changed"), qPrintable(result)); QCOMPARE(after, QString("12.75"));
+    QVERIFY(stale); QVERIFY2(result.contains("changed"), qPrintable(result)); QVERIFY(back); QCOMPARE(after, QString("12.75"));
   }
   void pvaWriteWaitsForFirstValue() {
 #if QTPROBE_HAVE_PVA
@@ -831,6 +838,8 @@ private slots:
     QVERIFY(!done[0][0].toBool() && !done[1][0].toBool()); QVERIFY(done[0][1].toString().contains("first value"));
     QTest::qWait(300); Channel check({prefix + "enum", "ca"}); check.start(); QTRY_VERIFY_WITH_TIMEOUT(check.snapshot.hasValue, 10000);
     QCOMPARE(check.snapshot.number, before);
+#else
+    QSKIP("Built without pvAccess");
 #endif
   }
   void recordFieldsStayUniqueAcrossTypeChanges() {
@@ -851,18 +860,25 @@ private slots:
     QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("OMSL"), QString("supervisory"), 10000); QTest::qWait(200);
     const auto longout = fields();
     QVERIFY(longout.contains("OUT") && !longout.contains("INP"));
+    // Checks are collected and verified after the loop, which ends with fixture.db
+    // running again, so a failure cannot leave later tests with the retyped IOC.
+    QStringList problems;
     for (int round = 0; round < 3; ++round) {
       for (const bool retyped : {true, false}) {
-        stopIoc(); QVERIFY(ioc.waitForFinished(5000)); saveLog();
+        stopIoc(); ioc.waitForFinished(5000); saveLog();
         launch(retyped ? QFINDTESTDATA("fixture-retyped.db") : QString());
-        QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("RTYP"), retyped ? QString("ai") : QString("longout"), 20000);
-        QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("SIMM"), QString("NO"), 5000); QTest::qWait(200);
+        const auto type = retyped ? QString("ai") : QString("longout");
+        if (!QTest::qWaitFor([&] { return explorer.fieldText("RTYP") == type && explorer.fieldText("SIMM") == "NO"; }, 20000)) { problems << type + ": fields did not return"; continue; }
+        QTest::qWait(200);
         const auto now = fields(); auto unique = now;
-        QCOMPARE(unique.removeDuplicates(), 0);
-        if (retyped) { QVERIFY(now.contains("INP")); for (const auto* gone : {"OUT", "DOL", "OMSL"}) QVERIFY2(!now.contains(gone), gone); }
-        else QCOMPARE(now, longout);
+        if (unique.removeDuplicates()) problems << type + ": duplicate rows";
+        if (retyped) {
+          if (!now.contains("INP")) problems << "ai: no INP";
+          for (const auto* gone : {"OUT", "DOL", "OMSL"}) if (now.contains(gone)) problems << QString("ai: kept ") + gone;
+        } else if (now != longout) problems << "longout: rows differ";
       }
     }
+    QVERIFY2(problems.isEmpty(), qPrintable(problems.join("; ")));
   }
   void confirmationIgnoresPvaBufferGrowth() {
 #if QTPROBE_HAVE_PVA
@@ -875,6 +891,8 @@ private slots:
     QSignalSpy done(channel, &Channel::writeFinished); inspector.requestWrite("[9, 10]");
     QTRY_COMPARE(done.size(), 1); QVERIFY2(done[0][0].toBool(), qPrintable(done[0][1].toString()));
     QTRY_COMPARE(channel->snapshot.values, (QStringList{"9", "10"}));
+#else
+    QSKIP("Built without pvAccess");
 #endif
   }
   void confirmationCannotReinterpretAnEdit() {
