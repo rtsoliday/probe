@@ -197,7 +197,8 @@ display is paused; the tabs and table also continue to show the latest state.
 ## Adjusting values
 
 The write box under the readback accepts native scalar values. **Write** or
-Enter in the box sends the edit. Enum selection and the **Adjust** section's
+Enter in the box sends the edit at once unless **Tools → Confirm before writing**
+is on. Enum selection and the **Adjust** section's
 slider, dial and step buttons only stage the edit; press Write to send it.
 **Readback** stages the exact current value; it is disabled for truncated
 arrays so an incomplete readback cannot silently replace the full array. It is
@@ -264,7 +265,7 @@ with Undo; the tooltip explains this limit.
 PROC field, as `caput rec.PROC 1` does. It appears for Channel Access PVs when
 the PROC field is connected and writable, and never in a read-only session.
 
-**Tools → Confirm before writing** asks before each write, Undo and Process,
+**Tools → Confirm before writing** (off by default) asks before each write, Undo and Process,
 showing the new and current values as they are sent (enum states with their
 labels, arrays with their element counts); the setting is remembered. If the PV's
 type, states or array format changes while the question is open, the write is

@@ -59,7 +59,7 @@ keyboard.
 
 Values honour the PV precision, enums plot as named states, numeric PVs show a
 range gauge with alarm bands, and CA char waveforms and `$` fields read and
-write as text. Undo, Process (CA), confirm-before-write and a session write log
+write as text. Undo, Process (CA), optional confirm-before-write (off by default) and a session write log
 support safe changes. The Record section shows a record's processing fields
 and clickable links, and explains why it may not be updating (disabled, PACT
 stuck, UDF, alarm cause, SCAN, deadband). History has hard count and memory
