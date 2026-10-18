@@ -38,8 +38,8 @@ Options:
 | `--session file.qtp` | Open a saved PV workspace |
 | `-h`, `--help`, `--version` | Command-line help/version without a display |
 
-`--` ends the options: every later argument is a PV name, even one starting
-with `-`. Count limits must be between 1 and 1000000. Invalid arguments exit with status
+`--` ends QtProbe's options: later arguments are PV names, even ones starting
+with `-` (Qt still reads its own options, such as `-style`, anywhere). Count limits must be between 1 and 1000000. Invalid arguments exit with status
 2. `--info` returns 1 if any PV is unavailable or its data/metadata times out,
 and 0 on success. GUI discovery continues after the deadline and recovers when
 an IOC returns. PVA requires an EPICS Base built with pvAccess and pvData.
@@ -241,8 +241,9 @@ also treated as unknown. Check readback after any failed write through a
 gateway. Stop
 fields such as a motor's `STOP` are separate PVs and can be written from their
 own inspector.
-A failed CA array put may have changed earlier elements before the IOC rejected
-a later one. QtProbe requests fresh readback, reports the potentially partial
+A failed CA put of two or more numeric or string elements may have changed
+earlier elements before the IOC rejected a later one (byte arrays and `$` fields
+are copied whole). QtProbe requests fresh readback, reports the potentially partial
 write, disables Undo and keeps further writes disabled until **Reconnect**.
 CA array writes are not transactional; a failure does not imply that the whole
 array stayed unchanged.
@@ -546,7 +547,8 @@ Use Command instead of Ctrl on macOS where a platform shortcut applies.
 - **Write is disabled:** check read-only mode, connection state, access rights
   and whether a write is pending (a slow record keeps a write pending until it
   finishes). A write whose outcome is unknown (a disconnect during the write,
-  Reconnect/Stop while it was pending, or a failed CA array write) requires checking readback and
+  Reconnect/Stop while it was pending, a failed CA put of two or more numeric
+  or string elements, or a failure that arrives with a disconnect) requires checking readback and
   reconnecting before another write is enabled. Large 64-bit
   integers use the exact value editor rather than slider/dial adjustments.
 - **Fewer array values shown:** the array table and plot show the first 2048
