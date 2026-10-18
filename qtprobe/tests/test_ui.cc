@@ -407,6 +407,12 @@ private slots:
     s.type = "DBF_DOUBLE"; s.numeric = true; QVERIFY(show({"1", "2.5"}));
     s.array = false; s.numeric = false; s.type = "DBF_CHAR"; s.bytes = true; s.longString = true; s.count = s.capacity = 8;
     QVERIFY(show({"111", "107", "0"})); QVERIFY(inspector.channel()->snapshot.longString);
+    // A $ field is always text; bytes that are not UTF-8 keep Readback off and say why.
+    Inspector field(Address::parse("R:rec.DESC$"), options); auto* fieldReadback = field.findChild<QPushButton*>("useReadbackButton");
+    Snapshot f = field.channel()->snapshot; f.connected = f.readable = f.writable = f.hasValue = f.array = f.bytes = true; f.type = "DBF_CHAR"; f.count = f.capacity = 8;
+    f.values = QStringList{"104", "255", "0"}; f.sequence = 1; field.channel()->update(f); field.refresh();
+    QVERIFY(field.channel()->snapshot.longString && field.channel()->snapshot.text.contains(QChar(QChar::ReplacementCharacter)));
+    QVERIFY(!fieldReadback->isEnabled()); QVERIFY2(fieldReadback->toolTip().contains("UTF-8"), qPrintable(fieldReadback->toolTip()));
   }
   void confirmationShowsWhatIsSent() {
     // The question names enum states by label and counts array elements.

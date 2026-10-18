@@ -259,8 +259,9 @@ write, so pressing it again restores the value it replaced. Undo sends the
 saved elements as they were received, so enum states and byte arrays are
 restored exactly. It is unavailable after a write that replaced a truncated
 array (see `--max-elements`) or a plain string that filled 39 bytes, because
-the full earlier value is not known; after a write that replaced text holding
-bytes that are not UTF-8, because those bytes cannot be written back exactly;
+the full earlier value is not known; after a write that replaced a plain string
+holding bytes that are not UTF-8, because those bytes cannot be written back
+exactly (a `$` field or character array keeps an exact Undo);
 and after a write whose outcome is unknown, because the PV may hold either value.
 Undo is also disabled if the PV's type, scalar/array shape, state list or CA
 array capacity changes. A scalar readback cannot restore a replacement array.

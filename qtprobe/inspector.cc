@@ -648,7 +648,7 @@ void Inspector::refreshWriteControls() {
   // A PV that came back with another type or state list (an IOC reboot) cannot take the saved elements.
   const bool undoFits = !hasUndo || !s.hasValue || undoCompatible(s);
   undo->setEnabled(ready && hasUndo && undoFits);
-  const bool undoRounded = hasUndo && s.hasValue && caIntegerReadbackMayBeRounded(s, undoValues);
+  const bool undoRounded = hasUndo && !undoFits && s.hasValue && caIntegerReadbackMayBeRounded(s, undoValues);
   undo->setToolTip(undoRounded ? "Undo unavailable: CA may round the saved 64-bit integer because the record type is unknown or changed; use pvAccess for exact values" :
       hasUndo && !undoFits ? "Undo unavailable: the PV's type, states or array capacity changed since your last write" :
       hasUndo ? "Restore " + preview(undoValue) + ", the value before your last write" :
@@ -661,6 +661,7 @@ void Inspector::refreshWriteControls() {
       std::any_of(s.values.cbegin(), s.values.cend(), [](const QString& v) { return v.contains(QChar::ReplacementCharacter); });
   useReadback->setEnabled(writable && s.readable && !s.truncated && !roundedInteger && (s.choices.isEmpty() || !s.editText().isEmpty()) && !replacement);
   useReadback->setToolTip(roundedInteger ? "CA may round 64-bit integers at or above 2^53; use pvAccess for exact Readback and Undo." :
+      replacement ? "Readback unavailable: the text holds bytes that are not UTF-8 and cannot be written back exactly." :
       !s.truncated ? "Copy the exact current readback into the value editor" : s.array ? "Readback is truncated; use a complete array for replacement writes." :
       "The server's copy fills 39 bytes and may be cut short; open the field with $ (for example rec.DESC$) for the exact text.");
   QString message, tone = "muted";
