@@ -129,8 +129,8 @@ utilities. Set `QT_DIR`, `QT_VERSION`, `EPICS_BASE`, `EPICS_HOST_ARCH`,
 `QTPROBE_MAKE_EXE` or `QTPROBE_CYGWIN_ROOT` to override those locations.
 Qt Test and `caRepeater.exe` plus `softIocPVA.exe` (or `softIoc.exe` for CA-only
 builds) are required for tests. `build-windows.bat clean` needs only Make and
-the shell utilities. The Windows build is verified with MSVC and Qt 6.11.2,
-including Channel Access and pvAccess.
+the shell utilities. The Windows build was verified with MSVC and Qt 6.11.2,
+including Channel Access and pvAccess, on a 0.1.0 pre-release.
 
 The executable is `bin\Windows-x86_64\qtprobe.exe`. To launch it from
 PowerShell with the default dependencies:
@@ -148,8 +148,8 @@ in `PATH`.
 On macOS the same `make qtprobe` applies: Qt is found with the `pkg-config`
 on `PATH` (Homebrew's Qt installs its `.pc` files), `EPICS_HOST_ARCH` defaults
 to `darwin-aarch64` or `darwin-x86`, and the executable is
-`bin/Darwin-<arch>/qtprobe`. The macOS build compiles without warnings with
-Qt 6; its test results are not recorded for 0.1.0.
+`bin/Darwin-<arch>/qtprobe`. The macOS build compiled without warnings with
+Qt 6 on a 0.1.0 pre-release; its test results are not recorded.
 The legacy program requires Unix/X11. Qt runtime deployment uses `windeployqt`
 or `macdeployqt` plus the matching EPICS runtime libraries.
 

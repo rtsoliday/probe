@@ -588,8 +588,9 @@ structure arrays can be browsed in Structure but are not editable. PVA writes do
 record processing beyond the server's normal put behavior.
 
 Validated for 0.1.0: Linux x86_64 with GCC 11, Qt 5.15 and EPICS Base 7.0.8
-(CA+PVA and CA-only builds, full test suite); native Windows x64 with MSVC and
-Qt 6.11.2, including CA and PVA. macOS with Qt 6 builds without warnings, but
-no test results are recorded for it. Other combinations are expected to work
+(CA+PVA and CA-only builds, full test suite). Native Windows x64 with MSVC and
+Qt 6.11.2, including CA and PVA, was validated on a 0.1.0 pre-release, where
+macOS with Qt 6 also built without warnings; no macOS test results are
+recorded. Other combinations are expected to work
 but were not validated. Production IOC and CA gateway interoperability requires
 site validation. No production PV writes are part of the test suite.
