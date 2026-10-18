@@ -521,8 +521,8 @@ private slots:
     QSignalSpy arrayWrites(&array, &Channel::writeFinished);
     array.write("[\"1e100\", \"-1e100\", \"9223372036854775806\", \"0.125\"]");
     QTRY_COMPARE(arrayWrites.size(), 1); QVERIFY(arrayWrites[0][0].toBool());
-    QTRY_COMPARE(array.snapshot.count, quint64(4));
-    QCOMPARE(array.snapshot.values, (QStringList{"1e+100", "-1e+100", "9.2233720368547758e+18", "0.125"}));
+    // Wait for the new elements: put completion can precede the monitor update.
+    QTRY_COMPARE(array.snapshot.values, (QStringList{"1e+100", "-1e+100", "9.2233720368547758e+18", "0.125"}));
   }
   void caInt64ArrayFractionalValues() {
     Channel integer({prefix + "int64Array", "ca"}); integer.start();
@@ -531,11 +531,9 @@ private slots:
     QSignalSpy integerWrites(&integer, &Channel::writeFinished), wideWrites(&wide, &Channel::writeFinished);
     const QString input = "[\"9223372036854775806\", \"1e-100\", \"-1e-100\", \"1.5\"]";
     integer.write(input); QTRY_COMPARE(integerWrites.size(), 1); QVERIFY(integerWrites[0][0].toBool());
-    QTRY_COMPARE(integer.snapshot.count, quint64(4));
-    QCOMPARE(integer.snapshot.values.mid(1), (QStringList{"0", "0", "1"}));
+    QTRY_COMPARE(integer.snapshot.values.mid(1), (QStringList{"0", "0", "1"})); QCOMPARE(integer.snapshot.count, quint64(4));
     wide.write(input); QTRY_COMPARE(wideWrites.size(), 1); QVERIFY(wideWrites[0][0].toBool());
-    QTRY_COMPARE(wide.snapshot.count, quint64(4));
-    QCOMPARE(wide.snapshot.values.mid(1), (QStringList{"1e-100", "-1e-100", "1.5"}));
+    QTRY_COMPARE(wide.snapshot.values.mid(1), (QStringList{"1e-100", "-1e-100", "1.5"})); QCOMPARE(wide.snapshot.count, quint64(4));
   }
   void caUnsignedFieldsRejectOutOfRange() {
     // CA serves USHORT fields as LONG and ULONG fields as DOUBLE; out-of-range scalars must not wrap.
