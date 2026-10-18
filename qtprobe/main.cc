@@ -155,7 +155,8 @@ int main(int argc, char** argv) {
         output << "  Value: " << s.valueText() << "\n\n";
       }
     }
-    if (parser.isSet("json")) QTextStream(&report) << QJsonDocument(json).toJson();
+    // JSON is UTF-8 (RFC 8259); a Qt 5 text stream would re-encode it with the locale codec.
+    if (parser.isSet("json")) report.write(QJsonDocument(json).toJson());
     return failed ? 1 : 0;
   }
   if (!explicitStyle) QApplication::setStyle("Fusion");
