@@ -134,6 +134,11 @@ private slots:
     parseWrite(s, "[null]", &error); QVERIFY(!error.isEmpty());
     parseWrite(s, "1,2", &error); QVERIFY(!error.isEmpty());
   }
+  void pvaUndefinedSeverityIsNamed() {
+    Snapshot s; s.severity = 4;
+    QCOMPARE(s.severityText(), QString("UNDEFINED")); QCOMPARE(s.json().value("severity").toString(), QString("UNDEFINED"));
+    s.severity = 5; QCOMPARE(s.severityText(), QString("5"));
+  }
   void embeddedNulWriteParsing() {
     Snapshot s; QString error;
     parseWrite(s, QString("one") + QChar(0) + "two", &error); QVERIFY(!error.isEmpty());

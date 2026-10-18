@@ -129,7 +129,7 @@ QString infoText(const Snapshot& s) {
   return result + "Value: " + s.valueText() + '\n';
 }
 QString alarmText(const Snapshot& s) {
-  const QStringList names{"No alarm", "Minor alarm", "Major alarm", "Invalid alarm"};
+  const QStringList names{"No alarm", "Minor alarm", "Major alarm", "Invalid alarm", "Undefined alarm"};
   return s.severity >= 0 && s.severity < names.size() ? names[s.severity] : s.severityText();
 }
 QString alarmTone(const Snapshot& s) {
@@ -756,7 +756,7 @@ void Inspector::refresh(bool allSections) {
     auto fillRow = [&](int row) {
       const auto& sample = samples[samples.size() - 1 - size_t(row)];
       cell(events, row, 0, sample.timestamp()); cell(events, row, 1, sample.value);
-      const QStringList severity{"No alarm", "Minor", "Major", "Invalid"};
+      const QStringList severity{"No alarm", "Minor", "Major", "Invalid", "Undefined"};
       cell(events, row, 2, !sample.connected ? "Disconnected" : sample.severity >= 0 && sample.severity < severity.size() ? severity[sample.severity] : QString::number(sample.severity));
     };
     int added = 0;

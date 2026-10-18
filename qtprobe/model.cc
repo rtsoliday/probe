@@ -28,7 +28,8 @@ QString epicsTimestamp(qint64 seconds, int nanoseconds) {
 }
 QString Snapshot::timestamp() const { return epicsTimestamp(seconds, nanoseconds); }
 QString Snapshot::severityText() const {
-  const QStringList names{"NO_ALARM", "MINOR", "MAJOR", "INVALID"};
+  // pvAccess also defines UNDEFINED (4).
+  const QStringList names{"NO_ALARM", "MINOR", "MAJOR", "INVALID", "UNDEFINED"};
   return severity >= 0 && severity < names.size() ? names[severity] : QString::number(severity);
 }
 bool Snapshot::floating() const {
