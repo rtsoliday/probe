@@ -330,9 +330,12 @@ optional fields do not prevent inspection. PVA displays the server's structured
 metadata, including `display`, `control` and `valueAlarm` when present; up to
 512 flattened fields are shown and array previews contain up to 16 elements.
 Field names and values are searchable. pvAccess does not report access rights
-to clients, so a writable PVA value always shows write access and an enabled
-write box; the server applies its access security when you write, and a denied
-write is reported on the result line.
+to clients, so in a normal session a writable PVA value always shows write
+access and an enabled write box; the server applies its access security when
+you write, and a denied write is reported on the result line. A read-only
+session (`--read-only`) and `--info` open no PVA put operation, so they report
+`Write access: no` for every PVA PV whatever the server allows; CA PVs show the
+IOC's access rights in every mode.
 
 ## Structure browser
 
