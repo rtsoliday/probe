@@ -234,6 +234,22 @@ private slots:
       for (const auto& f : why.findings()) QVERIFY2(!f.text.startsWith("Alarm 18"), qPrintable(f.text));
     }
   }
+  void recordFieldsSurviveLongOutage() {
+    // An IOC outage is "disconnected", not "the server does not publish SCAN or RTYP"; the rows return with the IOC.
+    for (const auto& provider : providers()) {
+      Channel subject({prefix + "calcLinked", provider}); subject.start(); QTRY_VERIFY_WITH_TIMEOUT(subject.snapshot.hasValue, 10000);
+      RecordExplorer explorer(&subject, 3); explorer.show(); explorer.setActive(true);
+      QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("RTYP"), QString("calc"), 10000);
+      auto* table = explorer.findChild<QTableWidget*>("recordFields"); auto* summary = explorer.findChild<QLabel*>("recordDiagnosis");
+      QTest::qWait(4000); const int rows = table->rowCount(); QVERIFY(rows > 0);
+      stopIoc(); ioc.waitForFinished(5000); saveLog(); QTest::qWait(2500);
+      const auto down = summary->text(); const int downRows = table->rowCount();
+      launch();  // before any check, so a failure cannot leave later tests without the IOC
+      QVERIFY2(!down.contains("does not publish"), qPrintable(provider + ": " + down)); QCOMPARE(downRows, rows);
+      QTRY_VERIFY_WITH_TIMEOUT(subject.snapshot.connected && explorer.fieldText("SCAN") == "1 second", 20000); QTest::qWait(4500);
+      QCOMPARE(table->rowCount(), rows);
+    }
+  }
   void recordFieldsStayCurrent() {
     for (const auto& provider : providers()) {
       // PACT is never posted: a record opened while processing must not stay "stuck".
@@ -772,7 +788,7 @@ private slots:
     RecordExplorer explorer(&subject, 3); explorer.show(); explorer.setActive(true);
     QTRY_COMPARE_WITH_TIMEOUT(explorer.fieldText("RTYP"), QString("longout"), 10000);
     auto* table = explorer.findChild<QTableWidget*>("recordFields");
-    const int originalRows = table->rowCount();
+    QTest::qWait(500); const int originalRows = table->rowCount(); QVERIFY(originalRows > 0);
     bool unique = true, bounded = true;
     for (int round = 0; round < 3; ++round) {
       for (const bool retyped : {true, false}) {
@@ -785,7 +801,7 @@ private slots:
           const auto field = table->item(row, 0)->data(Qt::UserRole + 1).toString();
           if (!field.isEmpty()) { unique &= !fields.contains(field); fields << field; }
         }
-        bounded &= table->rowCount() <= originalRows + 2;
+        bounded &= table->rowCount() <= originalRows + 2 && fields.contains("RTYP");
       }
     }
     QVERIFY(unique); QVERIFY(bounded);

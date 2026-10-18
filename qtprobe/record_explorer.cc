@@ -106,10 +106,11 @@ void RecordExplorer::refresh() {
     // Fields this record type or IOC version lacks never connect; drop them.
     if (s.hasValue || row.since.elapsed() <= limit) shown << &row;
   }
-  if (expired && !values.contains("SCAN") && !values.contains("RTYP")) {
+  // Only fields that never arrived mean the server does not publish them; an outage is "disconnected".
+  if (expired && !disconnected && !display.contains("SCAN") && !display.contains("RTYP")) {
     summary->setText(QString("Record fields are unavailable: the server does not publish %1.SCAN or %1.RTYP (for example a portable "
         "server, or a name that is not an IOC record).").arg(record));
-    setTone(summary, "warning"); table->setRowCount(0); shownFindings.clear(); return;
+    setTone(summary, "warning"); table->setRowCount(0); layoutKey.clear(); shownFindings.clear(); return;
   }
   const double age = subject->lastUpdateMs ? (QDateTime::currentMSecsSinceEpoch() - subject->lastUpdateMs) / 1000.0 : -1;
   shownFindings = disconnected ? QVector<Finding>{{"Record fields are disconnected; the diagnosis resumes when they reconnect.", true}} : recordDiagnosis(values, age);
