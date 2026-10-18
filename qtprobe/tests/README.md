@@ -44,8 +44,8 @@ counts, click/Ctrl/Shift selection, text/CSV/name copies, keyboard navigation
 and the age timer stopping when hidden. Other tests cover the range gauge and
 Trend limit lines, write logging and Clear, confirmation (answered by the test),
 pasted name lists, zoom of fonts and rows, and Open in QtStripTool through a
-stand-in script given by `QTPROBE_STRIPTOOL`. Core tests check that history
-stays within its count and the shared memory limit (including the split between
+native recorder helper selected by `QTPROBE_STRIPTOOL`. Core tests check that
+history stays within its count and the shared memory limit (including the split between
 PVs and long values shortened to 1000 characters), and that write-log values are
 limited. UI tests check that hidden inspectors and closed sections release plot
 and table copies, that a paused inspector keeps them, and that old QtStripTool
