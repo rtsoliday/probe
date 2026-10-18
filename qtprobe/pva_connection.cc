@@ -206,7 +206,9 @@ struct Inbox {
       const auto skipped = queue.back().snapshot.fields.value("Client coalesced updates").toULongLong() + 1;
       e.snapshot.fields["Client coalesced updates"] = QString::number(skipped);
       queue.back() = std::move(e);
-    } else if (queue.size() < 256) queue.push_back(std::move(e));
+    // Only errors are dropped at the bound: losing a connection or write event
+    // would leave a stale state or a write pending. Data is bounded by coalescing.
+    } else if (queue.size() < 256 || e.kind != Event::Error) queue.push_back(std::move(e));
     if (notify && wake) wake();
   }
 };
