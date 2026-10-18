@@ -458,7 +458,7 @@ axis is monitor event index; the CSV retains exact IOC timestamps and client
 receipt times for time analysis. Disconnects create gaps. Dense plots render a
 screen-column envelope that retains endpoints and extrema; they leave the
 underlying samples, statistics and export unchanged. History has two hard
-limits, so QtProbe can run for days without growing: at most `--history` events
+limits, so its memory stays bounded however long QtProbe runs: at most `--history` events
 per PV (10000 by default), and an estimated `--history-memory` for all PVs
 together (256 MB by default). Each PV may use an equal share of the memory
 limit; when a PV adds an event beyond either limit, or opening another PV
