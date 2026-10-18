@@ -545,6 +545,15 @@ private slots:
     wide.write("5000000000.5"); QTRY_COMPARE(w.size(), 1); QVERIFY(w[0][0].toBool()); QTRY_COMPARE(wide.snapshot.number, 5000000000.5);
     integer.write("2147483647"); QTRY_COMPARE(i.size(), 3); QVERIFY(i[2][0].toBool());  // shared fixture value
   }
+  void caDollarLinkFieldWrite() {
+    // Link fields opened with $ take their exact text over CA; a refused link changes nothing and locks nothing.
+    Channel link({prefix + "linkTarget.INPA$", "ca"}); link.start(); QTRY_VERIFY_WITH_TIMEOUT(link.snapshot.hasValue && link.snapshot.writable, 10000);
+    QSignalSpy done(&link, &Channel::writeFinished);
+    const auto target = prefix + "number.VAL CP MS";  // longer than 39 bytes with the test prefix
+    link.write(target); QTRY_COMPARE(done.size(), 1); QVERIFY2(done[0][0].toBool(), qPrintable(done[0][1].toString())); QVERIFY(!link.writeUncertain());
+    QTRY_COMPARE(link.snapshot.text, target);
+    link.write(prefix + "number NPP"); QTRY_COMPARE(done.size(), 2); QVERIFY(done[1][0].toBool()); QTRY_COMPARE(link.snapshot.text, prefix + "number NPP NMS");
+  }
   void caTextPathRefusesSubnormalPeers() {
     // The IOC would reject a subnormal text element part-way through the array.
     Channel wide({prefix + "array", "ca"}); wide.start(); QTRY_VERIFY_WITH_TIMEOUT(wide.snapshot.hasValue && wide.snapshot.writable, 10000);

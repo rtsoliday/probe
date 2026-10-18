@@ -204,7 +204,8 @@ arrays so an incomplete readback cannot silently replace the full array. It is
 also disabled for a string that fills the 39 bytes a plain string field is
 read with (CA DBR_STRING, or QSRV), because a longer field such as `DESC` or a
 link may have been cut short; open it with `$` (for example `rec.DESC$`) to
-read and write the exact text.
+read and write the exact text. Over pvAccess, QSRV refuses writes to link
+fields through `$`; write links over CA.
 CA exposes 64-bit integer fields as doubles, so readbacks at or above 2^53 in
 magnitude may be rounded. **Readback** and **Undo** are disabled for these
 ambiguous values, including arrays, unknown record types and fields whose

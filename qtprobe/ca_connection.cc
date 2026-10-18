@@ -316,6 +316,17 @@ public:
         }
         check(ca_array_put_callback(DBR_STRING, count, id, text.data(), written, this));
       } else check(ca_array_put_callback(DBR_DOUBLE, count, id, data.data(), written, this));
+    } else if (native == DBF_CHAR) {
+      // Bytes go as DBR_CHAR: link fields opened with $ accept only string and
+      // character puts, and a byte copy cannot fail part-way through the array.
+      std::vector<dbr_char_t> data;
+      for (const auto& value : values) {
+        bool ok; const auto number = value.toLongLong(&ok, value.startsWith("0x") || value.startsWith("0b") ? 0 : 10);
+        if (!ok || number < 0 || number > 255) throw std::runtime_error("Invalid or out-of-range integer value");
+        data.push_back(dbr_char_t(number));
+      }
+      arrayPut = false;
+      check(ca_array_put_callback(DBR_CHAR, count, id, data.data(), written, this));
     } else {
       std::vector<dbr_long_t> data;
       for (const auto& value : values) {

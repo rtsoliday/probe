@@ -20,6 +20,7 @@ record(int64out, "$(P)int64") { field(VAL, "9223372036854775806") }
 record(waveform, "$(P)int64Array") { field(FTVL, "INT64") field(NELM, "4") }
 record(waveform, "$(P)uint64Array") { field(FTVL, "UINT64") field(NELM, "4") }
 record(mbbo, "$(P)unsignedFields") { field(ZRST, "a") }
+record(calc, "$(P)linkTarget") { field(INPA, "$(P)number NPP") field(CALC, "A") }
 record(waveform, "$(P)stringArray") { field(FTVL, "STRING") field(NELM, "2") }
 record(ao, "$(P)protected") { field(VAL, "7") field(ASG, "READONLY") }
 record(ao, "$(P)longdesc") { field(DESC, "0123456789012345678901234567890123456789") }
