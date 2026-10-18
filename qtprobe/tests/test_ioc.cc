@@ -888,6 +888,7 @@ private slots:
     QTRY_COMPARE_WITH_TIMEOUT(fresh.snapshot.values, (QStringList{"42", "20", "30", "40"}), 10000);
     qInfo() << "Stored after failed array put:" << fresh.snapshot.values << "; callback:" << done[2][1].toString();
     QVERIFY(channel->writeUncertain()); QVERIFY(done[2][1].toString().contains("partially"));
+    array.refresh(); QVERIFY2(array.findChild<QLabel*>("writeStatus")->text().contains("partially"), qPrintable(array.findChild<QLabel*>("writeStatus")->text()));
     QTRY_COMPARE(channel->snapshot.values, (QStringList{"42", "20", "30", "40"}));
     QVERIFY(!array.findChild<QPushButton*>("undoWriteButton")->isEnabled());
     array.requestUndo(); QTest::qWait(100); QCOMPARE(done.size(), 3);

@@ -662,7 +662,11 @@ void Inspector::refreshWriteControls() {
   else if (!s.writable) message = "The server does not allow writes to this PV.";
   else if (channel_->writeSlow()) { message = "Still processing: the server has not reported completion after 10 s. Reconnect abandons the wait."; tone = "warning"; }
   else if (channel_->writePending()) message = "Writing… waiting for server completion.";
-  else if (channel_->writeUncertain()) { message = "Write outcome is uncertain. Check readback and reconnect before retrying."; tone = "warning"; }
+  else if (channel_->writeUncertain()) {
+    // Keep a failure's own explanation (a possibly partial CA array put) when it already says what to do.
+    message = !lastWriteOK && lastWriteMessage.contains("reconnect before retrying") ? lastWriteMessage : "Write outcome is uncertain. Check readback and reconnect before retrying.";
+    tone = "warning";
+  }
   else if (!lastWriteMessage.isEmpty()) {
     // A completion with a note (the server shortened the value) is a warning.
     message = lastWriteMessage;
