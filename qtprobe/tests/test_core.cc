@@ -141,6 +141,13 @@ private slots:
     parseWrite(s, "[\"one\\u0000two\"]", &error); QVERIFY(!error.isEmpty());
     s.longString = true;
     parseWrite(s, QString("one") + QChar(0) + "two", &error); QVERIFY(!error.isEmpty());
+    // A byte array showing text takes typed JSON as text; the refusal must not suggest otherwise.
+    Snapshot b; b.provider = "ca"; b.type = "DBF_CHAR"; b.hasValue = b.bytes = b.array = b.numeric = true; b.capacity = 40;
+    b.values = QStringList{"104", "105", "0"}; b.decodeBytes(); QVERIFY(b.longString);
+    QCOMPARE(parseWrite(b, "[1, 0, 2]", &error).size(), 10); QVERIFY(error.isEmpty());
+    parseWrite(b, QString("a") + QChar(0) + "b", &error); QVERIFY2(error.contains("only while it shows numeric values"), qPrintable(error));
+    b.values = QStringList{"1", "0", "2"}; b.decodeBytes(); QVERIFY(!b.longString);
+    QCOMPARE(parseWrite(b, "[1, 0, 2]", &error), (QStringList{"1", "0", "2"}));
   }
   void boundedHistoryAndStatistics() {
     History history(3); Snapshot s; s.connected = s.readable = s.hasValue = s.numeric = true;

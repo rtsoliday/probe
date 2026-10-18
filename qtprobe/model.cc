@@ -315,7 +315,7 @@ bool caIntegerReadbackMayBeRounded(const Snapshot& s, const QStringList& values)
 QStringList parseWrite(const Snapshot& s, const QString& text, QString* error) {
   error->clear();
   if (text.contains(QChar(0))) {
-    *error = "Embedded NUL characters cannot be written as text; use a numeric byte array for binary data."; return {};
+    *error = "Embedded NUL characters cannot be written as text; a byte array takes binary data as a JSON array only while it shows numeric values."; return {};
   }
   // U+FFFD stands for bytes that were not UTF-8; writing it would replace them.
   if (text.contains(QChar::ReplacementCharacter)) {
