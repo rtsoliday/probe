@@ -284,8 +284,8 @@ failures and refusals. **Export CSV…** saves the log; **Clear** empties it. Th
 log holds the latest 1000 entries, with each value limited to 1000 characters,
 and is not saved between sessions.
 
-Integer writes are range checked for the type the server reports and preserve
-64-bit precision. Channel Access reports USHORT fields as LONG, and ULONG and
+Integer writes are range checked for the type the server reports and are sent
+without losing 64-bit precision. Channel Access reports USHORT fields as LONG, and ULONG and
 64-bit integer fields as DOUBLE. CA scalar writes outside 0–65535 to a LONG or
 of 2^32 or more to a DOUBLE, and array elements of 2^53 or more, are therefore
 sent as integer text that the IOC parses for the field's own type, exactly or
@@ -293,14 +293,22 @@ rejected as out of range. Other CA array elements, and negative values written
 to unsigned fields (as with `caput`), are converted by the IOC without a range
 check; use `pva://` for exact type checks. A CA readback of a 64-bit field
 beyond 2^53 is rounded, so use `pva://` to read it exactly.
-**Through a CA gateway** (ca-gateway or another server that relays CA), the
-gateway converts each CA write to the type it reports for the field before the
-IOC sees it: DOUBLE for 64-bit integer fields, LONG for USHORT. Integer text is
-then not parsed by the IOC: values beyond 2^53 are rounded, values of 2^63 or
-more in magnitude can be stored as the most negative 64-bit integer, and
-USHORT and ULONG fields are not range checked, while the result still reads
-"Write completed". Write 64-bit and unsigned integer fields with `pva://`
-when CA goes through a gateway. Numeric
+**Through a CA gateway** (ca-gateway or another relay built on the EPICS
+portable CA server), the gateway converts each CA write to the type it reports
+for the field before the IOC sees it: DOUBLE for ULONG and 64-bit integer
+fields, LONG for USHORT. Integer text, in scalars and arrays alike, is then
+converted by the gateway instead of being parsed by the IOC, and the result
+still reads "Write completed". Values beyond 2^53 are rounded to the nearest
+double, and values near or outside the field's limits are stored as other
+values instead of being rejected: USHORT wraps modulo 65536 (70000 stores
+4464), and on a Linux x86-64 IOC ULONG wraps modulo 2^32 (4294967296 stores
+0), UINT64 values from 2^64−1024 upward, including 18446744073709551615, are
+stored as 0, and INT64 values from 2^63−512 (9223372036854775296, a valid
+value) upward or below the INT64 range are stored as the most negative 64-bit
+integer. IOCs on other platforms can store other wrong values. LONG and USHORT
+writes beyond ±2147480000 fail at the gateway, including valid LONG values.
+Write USHORT, ULONG and 64-bit integer fields, and LONG values near the 32-bit
+limits, with `pva://` when CA goes through a gateway. Numeric
 adjustments are disabled for 64-bit integers beyond the exact range of double;
 use the native value editor for those values. Hexadecimal
 integers can use `0x`. Floating-point writes must be finite. Enum writes accept
