@@ -123,7 +123,7 @@ For native Windows, run these commands from PowerShell or Command Prompt:
 
 The launcher initializes the installed Visual Studio x64 C++ tools, checks
 dependencies and configures runtime paths for tests. It uses the installed
-Qt MSVC SDK at `C:\Qt\6.11.2\msvc2022_64`, sibling `..\epics-base` with
+Qt 6.12.0 LTS MSVC SDK at `C:\Qt\6.12.0\msvc2022_64`, sibling `..\epics-base` with
 `EPICS_HOST_ARCH=windows-x64`, Strawberry GNU Make and `C:\cygwin64` shell
 utilities. Set `QT_DIR`, `QT_VERSION`, `EPICS_BASE`, `EPICS_HOST_ARCH`,
 `QTPROBE_MAKE_EXE` or `QTPROBE_CYGWIN_ROOT` to override those locations.
@@ -136,7 +136,7 @@ The executable is `bin\Windows-x86_64\qtprobe.exe`. To launch it from
 PowerShell with the default dependencies:
 
 ```powershell
-$env:PATH = "C:\Qt\6.11.2\msvc2022_64\bin;C:\github\epics-base\bin\windows-x64;$env:PATH"
+$env:PATH = "C:\Qt\6.12.0\msvc2022_64\bin;C:\github\epics-base\bin\windows-x64;$env:PATH"
 .\bin\Windows-x86_64\qtprobe.exe --version
 .\bin\Windows-x86_64\qtprobe.exe My:PV pva://My:PVA
 ```
