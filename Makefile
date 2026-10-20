@@ -34,6 +34,9 @@ distclean: docs-distclean
 	-@rmdir bin/*/ bin 2>/dev/null || true
 
 # Build the static documentation independently of Qt and EPICS.
+# Cleanup uses Python 3 on PATH, independent of the toolkit interpreter.
+# An explicit command-line PYTHON setting still takes precedence.
+docs-clean docs-distclean: PYTHON = $(if $(filter Windows,$(OS)),python,python3)
 DOCS_BASE ?= /
 docs:
 	$(PYTHON) scripts/build-docs.py --base "$(DOCS_BASE)"
