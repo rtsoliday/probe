@@ -4,7 +4,8 @@ QT_MODULES := Core Gui Widgets Network
 # Discover Base here; individual components enforce their own requirements.
 EPICS_OPTIONAL_LIBS := ca Com
 include Makefile.rules
-.PHONY: all probe qtprobe test test-qtprobe test-ioc install clean distclean
+.PHONY: all probe qtprobe test test-qtprobe test-ioc install clean distclean \
+        docs docs-clean docs-distclean
 all: qtprobe $(if $(HAVE_MOTIF),probe)
 ifeq ($(HAVE_MOTIF),)
 	@echo "Motif development files unavailable; built QtProbe only."
@@ -23,11 +24,20 @@ test test-qtprobe:
 test-ioc:
 	+$(MAKE) -C qtprobe test-ioc
 install: all
-clean:
+clean: docs-clean
 	+$(MAKE) -C probe $@
 	+$(MAKE) -C qtprobe $@
-distclean:
+distclean: docs-distclean
 	+$(MAKE) -C probe $@
 	+$(MAKE) -C qtprobe $@
 	@# rmdir removes the binary directories only when nothing else is in them.
 	-@rmdir bin/*/ bin 2>/dev/null || true
+
+# Build the static documentation independently of Qt and EPICS.
+DOCS_BASE ?= /
+docs:
+	$(PYTHON) scripts/build-docs.py --base "$(DOCS_BASE)"
+docs-clean:
+	$(PYTHON) scripts/sync-docs.py --clean
+docs-distclean:
+	$(PYTHON) scripts/sync-docs.py --distclean

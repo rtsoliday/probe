@@ -77,6 +77,38 @@ browser, Keyboard Shortcuts, User Manual, and an animated About dialog with
 author credits. Help is embedded and works offline; `QTPROBE_HELP_PATH` can
 select an installed or site-hosted manual.
 
+## Documentation website
+
+The documentation site follows the Qt StripTool, QtALH and QtEDM workflow.
+It provides searchable guides and reference pages from the same operator guide
+embedded in QtProbe, with the existing application screenshots.
+
+With Node.js 22 or newer, npm and Python 3 installed, run:
+
+```sh
+make docs
+python3 -m http.server 8000 --directory docs/html --bind 127.0.0.1
+```
+
+Open `http://127.0.0.1:8000/`. Qt and EPICS are not required to build the
+documentation. The build installs locked npm dependencies when absent,
+refreshes imported pages, builds the site, validates local links and anchors,
+and copies the validated output to `docs/html/`.
+
+For the APS manuals directory, build with the exact hosting URL prefix:
+
+```sh
+make docs DOCS_BASE=/manuals/QtProbe/
+```
+
+Copy the complete contents of `docs/html/`, including assets and subdirectories,
+to `/home/oxygen/OAG/oagWWW/manuals/QtProbe/`, served at `/manuals/QtProbe/`.
+Copying only `index.html` leaves out scripts, styles, images and search data.
+Rebuild when the URL prefix changes. Building does not publish the site.
+
+See [Maintaining the documentation](docs/site/develop/documentation.md) for
+source ownership, validation and cleanup commands.
+
 ## Build and run
 
 ```sh
@@ -92,7 +124,10 @@ make test                        # model, offscreen UI, isolated IOC tests
 
 Build products go to `bin/<OS>-<architecture>/`; Qt object directories include
 the Qt major. `make clean` removes objects; `make distclean` also removes local
-binaries. Both clean targets work without installed dependencies.
+binaries. Both clean targets work without installed Qt or EPICS dependencies.
+They also remove generated documentation; `distclean` removes its npm
+dependencies. Use `make docs-clean` or `make docs-distclean` to clean only
+documentation. Authored guides and screenshots are preserved.
 
 Requirements: GNU Make, C++17 compiler, Qt Core/Gui/Widgets/Network development
 files, and built EPICS Base. Qt Test is used by tests. The build discovers
