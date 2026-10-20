@@ -26,6 +26,7 @@ QTPROBE_CPPFLAGS += -DQTPROBE_HAVE_XCB $(shell $(PKG_CONFIG) --cflags xcb)
 QT_LIBS += $(shell $(PKG_CONFIG) --libs xcb)
 endif
 endif
+# Library prerequisites trigger relinks; LIBS supplies them in link order.
 ifeq ($(OS),Windows)
 CXXFLAGS = /nologo /O2 /W3 /external:anglebrackets /external:W0 /MD /EHsc /permissive- /Zc:lambda /Zc:__cplusplus /utf-8 $(CXX_STD_FLAGS)
 # Older EPICS pvData headers need delayed template lookup only in the PVA unit.
@@ -36,7 +37,7 @@ define compile
 	$(CXX) $(CPPFLAGS) $(QT_CFLAGS) $(CXXFLAGS) $(1) /c $< /Fo$@
 endef
 define link
-	link /nologo $(LDFLAGS) /OUT:$@ $^ $(LIBS) $(1)
+	link /nologo $(LDFLAGS) /OUT:$@ $(filter %.$(OBJEXT),$^) $(LIBS) $(1)
 endef
 # Explicit file logging also works when Windows has no attached console.
 define run_test
@@ -47,7 +48,7 @@ define compile
 	$(CXX) $(CPPFLAGS) $(QT_CFLAGS) $(CXXFLAGS) $(1) -MMD -MP -c $< -o $@
 endef
 define link
-	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS) $(1)
+	$(CXX) $(LDFLAGS) -o $@ $(filter %.$(OBJEXT),$^) $(LIBS) $(1)
 endef
 define run_test
 	QT_QPA_PLATFORM=offscreen $(1)

@@ -16,7 +16,7 @@ CPPFLAGS += $(EPICS_INCLUDES) -I$(MOTIF_INC) -I$(X11_INC)
 SOURCES = $(filter-out probeOption.c probeDial.c,$(wildcard *.c))
 PROD = probe
 probe_SRC = $(SOURCES)
-probe_LIBS = $(CA_LIBS) $(XM_LIB) $(MOTIF_STATIC_DEP_LIBS) $(MOTIF_STATIC_EXTRA_LIBS) $(XT_LIB) $(X11_LIB) $(EPICS_SYS_LIBS)
+probe_LIBS = $(CA_LIBS) $(XM_LIB) $(MOTIF_STATIC_DEP_LIBS) $(MOTIF_STATIC_EXTRA_LIBS) $(XMU_LIB) $(XT_LIB) $(X11_LIB) $(EPICS_SYS_LIBS)
 LDFLAGS += $(call epics_rpath,$(CA_LIBS),$(EPICS_BASE_LIB_DIR))
 EXTRA_CXX_OBJ_DEPS = probe.h probeVersion.h
 include ../Makefile.build
