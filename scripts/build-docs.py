@@ -86,6 +86,8 @@ def verify(base):
 
 
 def main():
+    # Documentation and npm build products are shared with other users.
+    os.umask(0o022)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base', default=os.environ.get('DOCS_BASE', '/'),
                         help='Hosting URL prefix, e.g. /manuals/QtProbe/ (default: /)')

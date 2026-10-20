@@ -2,6 +2,7 @@
 """Refresh QtProbe website pages and assets from repository documentation."""
 
 import argparse
+import os
 from pathlib import Path
 import re
 import shutil
@@ -114,6 +115,8 @@ def clean(dependencies=False):
 
 
 def main():
+    # Imported pages, screenshots and their parent directories must be readable.
+    os.umask(0o022)
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--clean', action='store_true')
