@@ -1,5 +1,8 @@
 # Probe and QtProbe build dispatcher, following QtALH and Qt StripTool.
 .DEFAULT_GOAL := all
+QT_MODULES := Core Gui Widgets Network
+# Discover Base here; individual components enforce their own requirements.
+EPICS_OPTIONAL_LIBS := ca Com
 include Makefile.rules
 .PHONY: all probe qtprobe test test-qtprobe test-ioc install clean distclean
 all: qtprobe $(if $(HAVE_MOTIF),probe)

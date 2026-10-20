@@ -1,4 +1,8 @@
 .DEFAULT_GOAL := all
+QT_REQUIRED := 1
+QT_MODULES := Core Gui Widgets Network
+EPICS_REQUIRED_LIBS := ca Com
+EPICS_OPTIONAL_LIBS := pvAccess pvData
 include ../Makefile.rules
 OBJ_DIR := O.$(OS)-$(ARCH)-qt$(QT_VERSION)
 SOURCES = model.cc channel.cc ca_connection.cc pva_connection.cc inspector.cc comparison.cc record.cc record_explorer.cc structure_browser.cc pv_drop.cc motif_pv_drop.cc help.cc about_banner.cc appearance.cc
@@ -9,12 +13,12 @@ HEADERS = $(wildcard *.h)
 # moc gets only these flags; compiler options from an environment CPPFLAGS would stop it.
 QTPROBE_CPPFLAGS = -I. -I$(OBJ_DIR) $(EPICS_INCLUDES) -DQTPROBE_HAVE_PVA=$(HAVE_PVA)
 CPPFLAGS += $(QTPROBE_CPPFLAGS)
-CXXFLAGS ?= -O2 -g -Wall -Wextra -Wno-unused-parameter -std=c++17 -fPIC
-LIBS = $(if $(filter 1,$(HAVE_PVA)),$(PVA_LIBS)) $(CA_LIBS) $(EPICS_SYS_LIBS) $(QT_LIBS)
+CXXFLAGS += $(if $(filter-out Windows,$(OS)),-Wno-unused-parameter)
+LIBS = $(if $(filter 1,$(HAVE_PVA)),$(PVA_LIBS)) $(CA_LIBS) $(EPICS_SYS_LIBS) $(QT_LIBS) $(LDLIBS)
 # Shared EPICS libraries need a run path; static ones (the default) must not add
 # one, or every launch searches that directory first for Qt and system libraries.
 comma := ,
-LDFLAGS += $(if $(filter %.$(EPICS_SHARED_EXT),$(CA_LIBS) $(PVA_LIBS)),-Wl$(comma)-rpath$(comma)$(EPICS_LIB_DIR))
+LDFLAGS += $(if $(filter %.$(EPICS_SHARED_EXT),$(CA_LIBS) $(PVA_LIBS)),-Wl$(comma)-rpath$(comma)$(EPICS_BASE_LIB_DIR))
 # Legacy MEDM's Motif drop protocol is available on X11 without linking Motif.
 ifeq ($(OS),Linux)
 ifneq ($(shell $(PKG_CONFIG) --exists xcb && echo yes),)
@@ -23,8 +27,7 @@ QT_LIBS += $(shell $(PKG_CONFIG) --libs xcb)
 endif
 endif
 ifeq ($(OS),Windows)
-CXX := cl
-CXXFLAGS = /nologo /O2 /W3 /external:anglebrackets /external:W0 /MD /EHsc /permissive- /Zc:lambda /Zc:__cplusplus /utf-8 /std:c++17
+CXXFLAGS = /nologo /O2 /W3 /external:anglebrackets /external:W0 /MD /EHsc /permissive- /Zc:lambda /Zc:__cplusplus /utf-8 $(CXX_STD_FLAGS)
 # Older EPICS pvData headers need delayed template lookup only in the PVA unit.
 $(OBJ_DIR)/pva_connection.obj: CXXFLAGS += /Zc:twoPhase-
 QTPROBE_CPPFLAGS += -DEPICS_CALL_DLL -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS
@@ -33,7 +36,7 @@ define compile
 	$(CXX) $(CPPFLAGS) $(QT_CFLAGS) $(CXXFLAGS) $(1) /c $< /Fo$@
 endef
 define link
-	link /nologo /OUT:$@ $^ $(LIBS) $(1)
+	link /nologo $(LDFLAGS) /OUT:$@ $^ $(LIBS) $(1)
 endef
 # Explicit file logging also works when Windows has no attached console.
 define run_test
@@ -51,39 +54,44 @@ define run_test
 endef
 endif
 .PHONY: all install check test test-core test-ui test-ioc clean distclean
-all: check install
+all: check
 check:
 	@test -n "$(HAVE_QT)" || { echo 'Qt 5.15 or Qt 6 Widgets development files required.'; exit 1; }
 	@test -f "$(EPICS_BASE)/include/cadef.h" || { echo 'Set EPICS_BASE to a built EPICS Base.'; exit 1; }
 	@echo "QtProbe: Qt $(QT_VERSION), EPICS $(EPICS_BASE), pvAccess=$(HAVE_PVA)"
-$(OBJ_DIR):
-	mkdir -p $@
-$(OBJ_DIR)/%.$(OBJEXT): %.cc $(HEADERS) Makefile ../Makefile.rules | $(OBJ_DIR)
+$(OBJ_DIR)/%.$(OBJEXT): %.cc $(HEADERS) $(BUILD_FILES) | $(OBJ_DIR)
 	$(call compile,)
-$(OBJ_DIR)/moc_channel.cc: channel.h Makefile ../Makefile.rules | $(OBJ_DIR)
+$(OBJ_DIR)/moc_channel.cc: channel.h $(BUILD_FILES) | $(OBJ_DIR)
 	$(MOC) $(QTPROBE_CPPFLAGS) $(QT_CFLAGS) $< -o $@
-$(OBJ_DIR)/moc_channel.$(OBJEXT): $(OBJ_DIR)/moc_channel.cc Makefile ../Makefile.rules
+$(OBJ_DIR)/moc_channel.$(OBJEXT): $(OBJ_DIR)/moc_channel.cc $(BUILD_FILES)
 	$(call compile,)
-$(OBJ_DIR)/resources.cc: resources/qtprobe.qrc $(wildcard resources/*.svg) ../docs/qtprobe-guide.md | $(OBJ_DIR)
+$(OBJ_DIR)/resources.cc: resources/qtprobe.qrc $(wildcard resources/*.svg) $(BUILD_FILES) ../docs/qtprobe-guide.md | $(OBJ_DIR)
 	$(RCC) $< -o $@
-$(OBJ_DIR)/resources.$(OBJEXT): $(OBJ_DIR)/resources.cc Makefile ../Makefile.rules
+$(OBJ_DIR)/resources.$(OBJEXT): $(OBJ_DIR)/resources.cc $(BUILD_FILES)
 	$(call compile,)
 $(OBJ_DIR)/qtprobe$(EXEEXT): $(OBJECTS) $(OBJ_DIR)/main.$(OBJEXT)
 	$(call link,)
-install: $(OBJ_DIR)/qtprobe$(EXEEXT)
-	@mkdir -p $(BIN_DIR) $(EPICS_BIN_DIR)
-	cp -f $< $(BIN_DIR)/
-	$(if $(EPICS_BIN_DIR),cp -f $< $(EPICS_BIN_DIR)/)
-$(OBJ_DIR)/test_%.moc: tests/test_%.cc Makefile ../Makefile.rules | $(OBJ_DIR)
+PROGRAM = $(OBJ_DIR)/qtprobe$(EXEEXT)
+install: install-program
+CUSTOM_COMPILE_RULES := 1
+CUSTOM_CLEAN := 1
+PROD = qtprobe
+qtprobe_OBJS = $(OBJECTS) $(OBJ_DIR)/main.$(OBJEXT)
+qtprobe_LIBS = $(LIBS)
+BUILD_OBJECTS += $(addprefix $(OBJ_DIR)/,test_core.$(OBJEXT) test_ui.$(OBJEXT) test_ioc.$(OBJEXT) striptool_recorder.$(OBJEXT) benchmark_cpu.$(OBJEXT))
+BUILD_GENERATED += $(OBJ_DIR)/moc_channel.cc $(OBJ_DIR)/resources.cc $(addprefix $(OBJ_DIR)/,test_core.moc test_ui.moc test_ioc.moc)
+CUSTOM_LINK_PRODUCTS += qtprobe
+include ../Makefile.build
+$(OBJ_DIR)/test_%.moc: tests/test_%.cc $(BUILD_FILES) | $(OBJ_DIR)
 	$(MOC) $(QTPROBE_CPPFLAGS) $(QT_CFLAGS) $(QT_TEST_CFLAGS) $< -o $@
-$(OBJ_DIR)/test_%.$(OBJEXT): tests/test_%.cc $(OBJ_DIR)/test_%.moc $(HEADERS) $(wildcard tests/*.h) Makefile ../Makefile.rules
+$(OBJ_DIR)/test_%.$(OBJEXT): tests/test_%.cc $(OBJ_DIR)/test_%.moc $(HEADERS) $(wildcard tests/*.h) $(BUILD_FILES)
 	$(call compile,$(QT_TEST_CFLAGS) -DEPICS_TEST_BIN='"$(EPICS_BASE)/bin/$(EPICS_HOST_ARCH)"')
 $(OBJ_DIR)/test_%$(EXEEXT): $(OBJ_DIR)/test_%.$(OBJEXT) $(OBJECTS)
 	$(call link,$(QT_TEST_LIBS))
 test: test-core test-ui test-ioc
 test-core: $(OBJ_DIR)/test_core$(EXEEXT)
 	$(call run_test,$<,test-core)
-$(OBJ_DIR)/striptool_recorder.$(OBJEXT): tests/striptool_recorder.cc Makefile ../Makefile.rules | $(OBJ_DIR)
+$(OBJ_DIR)/striptool_recorder.$(OBJEXT): tests/striptool_recorder.cc $(BUILD_FILES) | $(OBJ_DIR)
 	$(call compile,)
 $(OBJ_DIR)/striptool_recorder$(EXEEXT): $(OBJ_DIR)/striptool_recorder.$(OBJEXT)
 	$(call link,)
@@ -124,7 +132,7 @@ test-motif: $(OBJ_DIR)/test_ui$(EXEEXT) $(OBJ_DIR)/motif_drag_source
 test-ioc: $(OBJ_DIR)/test_ioc$(EXEEXT) $(OBJ_DIR)/qtprobe$(EXEEXT)
 	$(call run_test,$<,test-ioc)
 clean:
-	rm -rf O.$(OS)-$(ARCH)-qt5 O.$(OS)-$(ARCH)-qt6
+	rm -rf O.$(OS)-$(ARCH)-qt5 O.$(OS)-$(ARCH)-qt6 O.$(OS)-$(ARCH)-qt5-dev O.$(OS)-$(ARCH)-qt6-dev
 distclean: clean
 	rm -f $(BIN_DIR)/qtprobe$(EXEEXT)
 -include $(OBJECTS:.$(OBJEXT)=.d) $(OBJ_DIR)/main.d $(wildcard $(OBJ_DIR)/test_*.d)

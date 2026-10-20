@@ -2,27 +2,23 @@
 ifeq ($(LEGACY_EPICS_BUILD),1)
 include Makefile.epics
 else
+QT_MODULES :=
+EPICS_REQUIRED_LIBS := ca Com
+MOTIF_REQUIRED := 1
 include ../Makefile.rules
-CFLAGS ?= -O2 -g -std=gnu99 -Wno-deprecated-declarations
+ifneq ($(OS),Windows)
+# Preserve Probe's legacy C dialect and warning policy.
+CFLAGS := $(filter-out -Wall,$(CFLAGS)) -std=gnu99 -Wno-deprecated-declarations
+endif
 CPPFLAGS += $(EPICS_INCLUDES) -I$(MOTIF_INC) -I$(X11_INC)
 # Match the original source list; the optional serial dial driver and unused
 # alternative options dialog are preserved but were never linked by Probe.
 SOURCES = $(filter-out probeOption.c probeDial.c,$(wildcard *.c))
-OBJECTS = $(addprefix $(OBJ_DIR)/,$(SOURCES:.c=.o))
-.PHONY: all install clean distclean
-all: install
-$(OBJ_DIR)/%.o: %.c probe.h probeVersion.h Makefile ../Makefile.rules
-	@mkdir -p $(OBJ_DIR)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
-$(OBJ_DIR)/probe: $(OBJECTS)
-	$(CXX) $(LDFLAGS) -o $@ $^ $(CA_LIBS) $(EPICS_SYS_LIBS) -Wl,-rpath,$(EPICS_LIB_DIR) -L$(MOTIF_LIB) -L$(X11_LIB) -lXm -lXt -lX11
-install: $(OBJ_DIR)/probe
-	@mkdir -p $(BIN_DIR) $(EPICS_BIN_DIR)
-	cp -f $< $(BIN_DIR)/probe
-	$(if $(EPICS_BIN_DIR),cp -f $< $(EPICS_BIN_DIR)/probe)
-clean:
-	rm -rf O.$(OS)-$(ARCH)
-distclean: clean
-	rm -f $(BIN_DIR)/probe
--include $(OBJECTS:.o=.d)
+PROD = probe
+probe_SRC = $(SOURCES)
+probe_LIBS = $(CA_LIBS) $(XM_LIB) $(MOTIF_STATIC_DEP_LIBS) $(MOTIF_STATIC_EXTRA_LIBS) $(XT_LIB) $(X11_LIB) $(EPICS_SYS_LIBS)
+LDFLAGS += $(call epics_rpath,$(CA_LIBS),$(EPICS_BASE_LIB_DIR))
+EXTRA_CXX_OBJ_DEPS = probe.h probeVersion.h
+include ../Makefile.build
+$(probe_OBJS): probe.h probeVersion.h
 endif
