@@ -1,10 +1,10 @@
 # QtProbe tests
 
 Run `make test` at the repository root, or run `make -C qtprobe test-core`,
-`test-ui`, or `test-ioc` separately. Tests build in the selected Qt object tree.
+`test-ui`, `test-sdds`, or `test-ioc` separately. Tests build in the selected Qt object tree.
 On Windows, `build-windows.bat test 4` initializes the compiler and runtime
-environment and runs all three suites. Text logs are retained as `test-core.txt`,
-`test-ui.txt` and `test-ioc.txt` in the object directory. The QtStripTool launch
+environment and runs all four suites. Text logs are retained as `test-core.txt`,
+`test-ui.txt`, `test-sdds.txt` and `test-ioc.txt` in the object directory. The QtStripTool launch
 test builds a native recorder helper, so it needs neither a Unix script nor
 an installed QtStripTool. The two X11 drag interoperability tests are skipped
 by the offscreen suite on Windows, as on other offscreen platforms.
@@ -17,6 +17,21 @@ precision display, alarm limits, CA/PVA long strings (`DESC$` and a CHAR
 waveform), record processing, and an inspector's write → Undo → Process round
 trip with its log. UI tests use Qt's offscreen platform, with temporary
 settings. Missing IOC prerequisites fail.
+
+The SDDS suite reads exported files back through the selected SDDS library.
+It checks scalar history and exact timestamps, retained array elements, typed
+snapshot values, 64-bit integer precision, strings, enums, metadata, empty data,
+Unicode destinations, failed-save preservation and menu availability. When
+SDDS is absent it checks that the actions are omitted and programmatic export
+reports unavailable support. Round-trip cases are skipped in that build.
+To exercise it explicitly without SDDS:
+
+```sh
+make -C qtprobe test-sdds SDDS_INCLUDE_DIR=/nonexistent/include SDDS_LIB_DIR=/nonexistent/lib
+```
+
+No clean is required when changing SDDS availability. Older SDDS libraries
+without 64-bit types are tested through the same suite, using exact strings.
 
 Artifacts, including IOC output and a UI screenshot, are stored under the Qt
 object directory's `test-artifacts/`. IOC processes are terminated by test

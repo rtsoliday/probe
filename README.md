@@ -6,7 +6,7 @@ conventions of QtEDM, QtALH and Qt StripTool.
 
 QtProbe supports Channel Access and native pvAccess, enum and numeric
 adjustments, arrays, searchable metadata, local history and plots, JSON/CSV
-export, sessions and a display-free `--info` command.
+export, optional SDDS history/array/snapshot export, sessions and a display-free `--info` command.
 
 ## Feature highlights
 
@@ -143,6 +143,17 @@ environment earlier in `PATH` cannot select Conda's Qt.
 If Base has pvAccess/pvData, PVA is enabled automatically. CA-only builds report
 an explicit error for `pva://` names. Legacy Probe additionally requires Motif,
 Xt and X11. QtProbe does not link Motif.
+
+SDDS export is enabled automatically when a quiet compile/link probe finds
+compatible headers and libraries. The search tries a sibling `SDDS` checkout
+(`include` and `lib/<OS>-<architecture>`), configured EPICS extensions directories,
+then `/usr/local/epics/extensions`. Set `SDDS_REPO` for another checkout, or
+set both `SDDS_INCLUDE_DIR` and `SDDS_LIB_DIR` for an installed copy. Explicit
+directory overrides disable fallback searching; nonexistent paths build without
+SDDS. Missing or unusable libraries silently omit the SDDS actions. Probe logs
+are kept under the Qt object directory as `sdds-probe-*.log`. The probe is never
+executed, and cleanup targets skip it. Run `make -C qtprobe test-sdds` to check
+SDDS round trips, exact values, retained arrays, metadata and menu availability.
 
 On APS Linux, the default uses the installed GCC 11.3 toolchain and a static
 C++ runtime, matching the other Qt ports. Set `CUSTOM_GCC_PATH=` to use the

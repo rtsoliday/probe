@@ -1,5 +1,6 @@
 #pragma once
 #include "channel.h"
+#include "sdds_export.h"
 #include <QLabel>
 #include <QMainWindow>
 #include <QWidget>
@@ -71,6 +72,7 @@ public:
   void refresh(bool allSections = true);
   void saveSnapshot(const QString&);
   void saveHistory(const QString&);
+  void saveSdds(const QString&, SddsExportKind);
   // Requested sections; unavailable ones (Array for scalars, Adjust without
   // numeric write access, Structure for CA) stay hidden until the PV supports them.
   int sections() const { return requested; }
@@ -186,6 +188,7 @@ private:
   QLabel *connectionSummary, *entryError, *statusText;
   QToolButton* exportButton;
   QAction *snapshotAction, *historyAction, *saveSessionAction, *closeAction;
+  QAction *sddsSnapshotAction = nullptr, *sddsHistoryAction = nullptr, *sddsArrayAction = nullptr;
   QAction *allPvsAction, *inspectorAction, *nextPvAction, *previousPvAction;
   bool navigationDirty = true;
   bool comparisonVisible = false, confirmWrites = false;

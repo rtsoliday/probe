@@ -113,7 +113,7 @@ control-room screens; the zoom is remembered too. Closing the last PV returns to
 the compact welcome view.
 
 The export button (download icon) beside **Add** offers the same snapshot,
-history and session actions as File. It is enabled when a PV is open. Invalid
+history, optional SDDS exports and session actions as File. It is enabled when a PV is open. Invalid
 PV addresses produce a message below the entry field without opening a dialog.
 Snapshot and history exports apply to the selected PV; sessions include every
 open PV. A read-only session shows a **Read only** badge beside the entry field.
@@ -487,7 +487,46 @@ or writes.
 ## Export and sessions
 
 File exports the current snapshot as JSON and retained history as CSV using
-atomic saves. Sessions (`.qtp`) save PV addresses and reopen them as tabs and
+atomic saves. When SDDS libraries were available at build time, File and the
+export button also offer three binary SDDS exports for the selected PV:
+
+- **Export history (SDDS)** saves every retained scalar event in acquisition
+  order. Columns include `Time` (IOC epoch seconds), exact `TimeSeconds` and
+  `TimeNanoseconds`, client `ReceivedTime` and exact `ReceivedMilliseconds`,
+  numeric `Value`, retained `ValueText`, `Severity`, and `Connected`. Duplicate
+  IOC timestamps remain separate events. Disconnects and nonnumeric readings
+  have NaN numeric values. `ValueText` preserves the stored representation of
+  large integers and enum labels; the numeric column can round large integers.
+  Existing history limits and text shortening still apply. History exports do
+  not contain full waveforms or per-event alarm status/messages.
+- **Export array (SDDS)** saves the current array as `Index`, typed `Value`,
+  and original `ValueText` columns. It includes all retained elements, including
+  elements beyond the first 2048 shown in the Array table. `Count`, `Capacity`,
+  `RetainedCount`, and `Truncated` parameters describe what was received and
+  retained. It is enabled only when a current array value is available.
+- **Export snapshot (SDDS)** saves the current scalar value, or all retained
+  elements for an array, with the same typed value columns. Before a value is
+  received it saves a zero-row page with metadata. A disconnected PV's last
+  received value is identified by its connection state and IOC timestamp.
+
+All three write one uncompressed binary page, regardless of the filename
+suffix. Page parameters include PV name, provider, host, native type, units,
+description, exact IOC timestamp fields, access/connection flags, alarm
+status/severity/message, precision and display/control/alarm limits. Metadata
+describes the current snapshot, including for history exports. The string
+arrays `MetadataNames` and `MetadataValues` retain additional information and
+`EnumChoices` records enum labels when present. Enum snapshot values also
+include a `State` column. Nested PVA structures remain available through JSON.
+
+Signed/unsigned 64-bit snapshot and array values use native SDDS integer types
+when supported by the installed library. Older SDDS versions store those
+values as exact decimal strings. `TimeSeconds` and `ReceivedMilliseconds`
+history columns are exact decimal strings on all versions. Export preserves
+the values QtProbe received; it cannot recover precision already lost in a
+CA readback. Failed exports preserve existing destination files. SDDS actions
+are omitted when the libraries are unavailable; JSON/CSV exports remain usable.
+
+Sessions (`.qtp`) save PV addresses and reopen them as tabs and
 table rows; they contain no values to replay or write. Session opens validate
 every address before adding PVs. Read-only mode is a launch option and applies
 to sessions.

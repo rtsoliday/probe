@@ -787,6 +787,9 @@ void Inspector::refresh(bool allSections) {
 }
 void Inspector::saveSnapshot(const QString& path) { saveFile(path, QJsonDocument(channel_->snapshot.json()).toJson()); }
 void Inspector::saveHistory(const QString& path) { saveFile(path, channel_->history.csv()); }
+void Inspector::saveSdds(const QString& path, SddsExportKind kind) {
+  probe::saveSdds(path, kind, channel_->snapshot, channel_->history);
+}
 Window::Window(Options o) : options(o) {
   // Zoom scales the application font, so it applies before widgets are built.
   setZoom(QSettings().value("zoom", 100).toInt());
@@ -872,7 +875,24 @@ Window::Window(Options o) : options(o) {
     const auto path = QFileDialog::getSaveFileName(this, "Export history", {}, "CSV (*.csv)");
     if (!path.isEmpty()) try { current()->saveHistory(path); } catch (const std::exception& e) { QMessageBox::warning(this, "Export", e.what()); }
   }); historyAction->setObjectName("historyAction");
-  auto* exportMenu = new QMenu(exportButton); exportMenu->addAction(snapshotAction); exportMenu->addAction(historyAction); exportMenu->addSeparator(); exportMenu->addAction(saveSessionAction); exportButton->setMenu(exportMenu);
+  auto* exportMenu = new QMenu(exportButton); exportMenu->addAction(snapshotAction); exportMenu->addAction(historyAction);
+  auto* exportSeparator = exportMenu->addSeparator(); exportMenu->addAction(saveSessionAction); exportButton->setMenu(exportMenu);
+  if (sddsAvailable()) {
+    const auto addSddsAction = [this, file, exportMenu, exportSeparator](const QString& title, const char* name, SddsExportKind kind) {
+      auto* action = file->addAction(title, this, [this, title, kind] {
+        if (!current()) return;
+        const auto path = QFileDialog::getSaveFileName(this, title, {}, "SDDS (*.sdds);;All files (*)");
+        if (!path.isEmpty()) try { current()->saveSdds(path, kind); }
+          catch (const std::exception& e) { QMessageBox::warning(this, "Export", e.what()); }
+      });
+      action->setObjectName(name);
+      exportMenu->insertAction(exportSeparator, action);
+      return action;
+    };
+    sddsHistoryAction = addSddsAction("Export history (SDDS)…", "sddsHistoryAction", SddsExportKind::History);
+    sddsArrayAction = addSddsAction("Export array (SDDS)…", "sddsArrayAction", SddsExportKind::Array);
+    sddsSnapshotAction = addSddsAction("Export snapshot (SDDS)…", "sddsSnapshotAction", SddsExportKind::Snapshot);
+  }
   file->addSeparator(); file->addAction("&Quit", this, &QWidget::close)->setShortcut(QKeySequence::Quit);
   auto* view = menuBar()->addMenu("&View"); auto* viewModes = new QActionGroup(this);
   allPvsAction = view->addAction("All PVs", this, [this] { setComparison(true); }); allPvsAction->setShortcut(QKeySequence("Ctrl+1")); allPvsAction->setObjectName("allPvsAction"); allPvsAction->setCheckable(true); viewModes->addAction(allPvsAction);
@@ -1002,6 +1022,11 @@ void Window::updateNavigation() {
   allPvsAction->setChecked(comparisonVisible); inspectorAction->setChecked(!comparisonVisible);
   comparison->setCurrent(current() ? current()->channel() : nullptr); comparison->refresh();
   const bool havePv = current(); exportButton->setEnabled(havePv); snapshotAction->setEnabled(havePv); historyAction->setEnabled(havePv); saveSessionAction->setEnabled(count > 0); closeAction->setEnabled(havePv);
+  if (sddsSnapshotAction) {
+    sddsSnapshotAction->setEnabled(havePv);
+    sddsHistoryAction->setEnabled(havePv && !current()->channel()->snapshot.array);
+    sddsArrayAction->setEnabled(havePv && current()->channel()->snapshot.array && current()->channel()->snapshot.hasValue);
+  }
   statusText->setText(count ? QString("%1 open PV%2 · F1 for help").arg(count).arg(count == 1 ? "" : "s") : "Ready · F1 for help");
   // Refit when the shown structure changes, not on every value update.
   const auto key = QString("%1:%2:%3").arg(page).arg(multiple).arg(page == 2 ? count : page == 1 ? stack->currentIndex() : 0);
