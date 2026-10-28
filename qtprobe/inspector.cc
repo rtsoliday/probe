@@ -14,6 +14,7 @@
 #include <functional>
 namespace probe {
 namespace {
+constexpr qint64 maximumSessionBytes = 4LL * 1024 * 1024;
 void saveFile(const QString& path, const QByteArray& bytes) {
   QSaveFile file(path);
   if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
@@ -1216,14 +1217,29 @@ void Window::closePv(int index) {
 void Window::saveSession(const QString& path) {
   QJsonArray pvs;
   for (int i = 0; i < stack->count(); ++i) { const auto& s = static_cast<Inspector*>(stack->widget(i))->channel()->snapshot; pvs.append(s.provider + "://" + s.name); }
-  saveFile(path, QJsonDocument(QJsonObject{{"version", 1}, {"pvs", pvs}}).toJson());
+  const auto bytes = QJsonDocument(QJsonObject{{"version", 1}, {"pvs", pvs}}).toJson();
+  if (bytes.size() > maximumSessionBytes) throw std::runtime_error("Session exceeds 4 MiB");
+  saveFile(path, bytes);
 }
 void Window::loadSession(const QString& path) {
   QFile file(path); if (!file.open(QIODevice::ReadOnly)) throw std::runtime_error("Cannot open session");
-  QJsonParseError error; const auto doc = QJsonDocument::fromJson(file.readAll(), &error);
+  if (file.size() > maximumSessionBytes) throw std::runtime_error("Session exceeds 4 MiB");
+  // A size check alone does not protect against a file growing during the read.
+  QByteArray input;
+  while (!file.atEnd()) {
+    const auto chunk = file.read(std::min<qint64>(65536, maximumSessionBytes + 1 - input.size()));
+    if (chunk.isEmpty()) {
+      if (file.error() != QFile::NoError) throw std::runtime_error("Cannot read session");
+      break;
+    }
+    input += chunk;
+    if (input.size() > maximumSessionBytes) throw std::runtime_error("Session exceeds 4 MiB");
+  }
+  QJsonParseError error; const auto doc = QJsonDocument::fromJson(input, &error);
   if (error.error != QJsonParseError::NoError || doc.object().value("version").toInt() != 1 || !doc.object().value("pvs").isArray()) throw std::runtime_error("Invalid QtProbe session");
-  QStringList pvs; for (const auto& pv : doc.object().value("pvs").toArray()) pvs << Address::parse(pv.toString(), options.provider).uri();
-  if (pvs.size() > 100) throw std::runtime_error("Session exceeds 100 PVs");
+  const auto entries = doc.object().value("pvs").toArray();
+  if (entries.size() > 100) throw std::runtime_error("Session exceeds 100 PVs");
+  QStringList pvs; for (const auto& pv : entries) pvs << Address::parse(pv.toString(), options.provider).uri();
   if (!pvs.isEmpty() && !addPvs(pvs)) throw std::runtime_error(entryError->text().toStdString());
 }
 void Window::closeEvent(QCloseEvent* e) { QSettings().setValue("windowGeometry", saveGeometry()); QMainWindow::closeEvent(e); }

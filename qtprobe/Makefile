@@ -4,6 +4,10 @@ QT_MODULES := Core Gui Widgets Network
 EPICS_REQUIRED_LIBS := ca Com
 EPICS_OPTIONAL_LIBS := pvAccess pvData
 include ../Makefile.rules
+ifeq ($(OS),Linux)
+CXXFLAGS += -fstack-protector-strong -fPIE
+LDFLAGS += -pie -Wl,-z,relro,-z,now
+endif
 OBJ_DIR := O.$(OS)-$(ARCH)-qt$(QT_VERSION)
 SOURCES = sdds_export.cc model.cc channel.cc ca_connection.cc pva_connection.cc inspector.cc comparison.cc record.cc record_explorer.cc structure_browser.cc pv_drop.cc motif_pv_drop.cc help.cc about_banner.cc appearance.cc
 OBJEXT := $(if $(filter Windows,$(OS)),obj,o)

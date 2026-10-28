@@ -432,11 +432,16 @@ records) show a note instead.
 
 The **Array** section, offered for array PVs, shows up to 2048 retained values
 and an index plot. Snapshot JSON contains
-all retained values. CA uses actual-length subscriptions so waveforms report
-their valid element count rather than padded capacity. Both CA and PVA receive
-the server's update but copy only the retained prefix into QtProbe. The
-retention limit does not limit network traffic. CA's `EPICS_CA_MAX_ARRAY_BYTES`
-setting also applies to received CA messages.
+all retained values. CA uses actual-length subscriptions when the array's
+capacity fits within the retention limit. For larger CA arrays it requests
+only the retained prefix from the server. When the capped response fills that
+request, QtProbe marks it as potentially truncated; its count is the received
+count because CA cannot report the full live length in that response. CA's
+`EPICS_CA_MAX_ARRAY_BYTES` setting also applies to received CA messages.
+PVA still receives the full monitor update because its standard monitor
+request has no array slice. QtProbe limits the values copied into the UI and
+rejects snapshots that require more than 8 MiB of copied PVA text. A rejected
+update clears the displayed value and disables writes until a valid update arrives.
 PVA capacity describes the received buffer; it is not assumed to be the
 server's maximum writable array length.
 
@@ -527,8 +532,9 @@ CA readback. Failed exports preserve existing destination files. SDDS actions
 are omitted when the libraries are unavailable; JSON/CSV exports remain usable.
 
 Sessions (`.qtp`) save PV addresses and reopen them as tabs and
-table rows; they contain no values to replay or write. Session opens validate
-every address before adding PVs. Read-only mode is a launch option and applies
+table rows; they contain no values to replay or write. Session saves and opens
+are limited to 4 MiB. Opens validate every address before adding PVs and reject
+sessions with more than 100 PVs. Read-only mode is a launch option and applies
 to sessions.
 
 ## Help and manuals

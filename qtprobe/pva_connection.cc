@@ -16,26 +16,38 @@ namespace pva = epics::pvAccess;
 namespace pvd = epics::pvData;
 namespace probe {
 namespace {
-QString scalarText(const pvd::PVScalar& value) {
+// PVA has already received and decoded a monitor update here. Limit additional
+// Qt string copies so a server-supplied string cannot multiply into the tree,
+// value list, and metadata without bound.
+struct TextBudget {
+  size_t remaining = 8 * 1024 * 1024;
+  QString copy(const std::string& value) {
+    if (value.size() > remaining) throw std::runtime_error("PVA snapshot text exceeds 8 MiB");
+    remaining -= value.size();
+    return QString::fromStdString(value);
+  }
+};
+QString scalarText(const pvd::PVScalar& value, TextBudget& textBudget) {
   switch (value.getScalar()->getScalarType()) {
   case pvd::pvFloat: return QString::number(value.getAs<float>(), 'g', 9);
   case pvd::pvDouble: return QString::number(value.getAs<double>(), 'g', 17);
-  default: return QString::fromStdString(value.getAs<std::string>());
+  case pvd::pvString: return textBudget.copy(static_cast<const pvd::PVString&>(value).get());
+  default: return textBudget.copy(value.getAs<std::string>());
   }
 }
-template<class T> void arrayValues(const pvd::PVScalarArray& value, QStringList& out, int limit) {
+template<class T> void arrayValues(const pvd::PVScalarArray& value, QStringList& out, int limit, TextBudget& textBudget) {
   const auto& array = static_cast<const pvd::PVValueArray<T>&>(value);
   const auto data = array.view();
   for (size_t i = 0; i < std::min<size_t>(data.size(), size_t(limit)); ++i) {
-    if constexpr (std::is_same_v<T, std::string>) out << QString::fromStdString(data[i]);
+    if constexpr (std::is_same_v<T, std::string>) out << textBudget.copy(data[i]);
     else if constexpr (std::is_floating_point_v<T>) out << QString::number(data[i], 'g', sizeof(T) == 4 ? 9 : 17);
     else if constexpr (std::is_signed_v<T>) out << QString::number(qlonglong(data[i]));
     else out << QString::number(qulonglong(data[i]));
   }
 }
-void arrayText(const pvd::PVScalarArray& array, QStringList& out, int limit) {
+void arrayText(const pvd::PVScalarArray& array, QStringList& out, int limit, TextBudget& textBudget) {
   switch (array.getScalarArray()->getElementType()) {
-#define ARRAY(KIND, TYPE) case pvd::KIND: arrayValues<TYPE>(array, out, limit); break
+#define ARRAY(KIND, TYPE) case pvd::KIND: arrayValues<TYPE>(array, out, limit, textBudget); break
   ARRAY(pvBoolean, pvd::boolean); ARRAY(pvByte, pvd::int8); ARRAY(pvUByte, pvd::uint8);
   ARRAY(pvShort, pvd::int16); ARRAY(pvUShort, pvd::uint16);
   ARRAY(pvInt, pvd::int32); ARRAY(pvUInt, pvd::uint32);
@@ -73,10 +85,10 @@ QString summary(const FieldNode& node) {
   if (const auto* value = member(node, "value")) return value->value;
   return {};
 }
-FieldNode tree(const pvd::PVField* field, const QString& name, int& budget) {
+FieldNode tree(const pvd::PVField* field, const QString& name, int& budget, TextBudget& textBudget) {
   FieldNode n; n.name = name; --budget;
   if (!field) { n.type = "(null)"; return n; }
-  n.type = QString::fromStdString(field->getField()->getID());
+  n.type = textBudget.copy(field->getField()->getID());
   // Adds children until the field budget runs out; the rest are counted.
   auto add = [&](size_t total, const std::function<FieldNode(size_t)>& make) {
     for (size_t i = 0; i < total; ++i) {
@@ -85,11 +97,11 @@ FieldNode tree(const pvd::PVField* field, const QString& name, int& budget) {
     }
   };
   switch (field->getField()->getType()) {
-  case pvd::scalar: n.value = scalarText(static_cast<const pvd::PVScalar&>(*field)); break;
+  case pvd::scalar: n.value = scalarText(static_cast<const pvd::PVScalar&>(*field), textBudget); break;
   case pvd::scalarArray: {
     const auto& array = static_cast<const pvd::PVScalarArray&>(*field);
     n.kind = FieldNode::Array; n.length = array.getLength();
-    QStringList values; arrayText(array, values, int(std::min<size_t>(n.length, treeElements)));
+    QStringList values; arrayText(array, values, int(std::min<size_t>(n.length, treeElements)), textBudget);
     n.value = '[' + QStringList(values.mid(0, 16)).join(", ") + (n.length > 16 ? ", …]" : "]");
     const auto element = QString::fromLatin1(pvd::ScalarTypeFunc::name(array.getScalarArray()->getElementType()));
     add(size_t(values.size()), [&](size_t i) { --budget; FieldNode e; e.name = QString("[%1]").arg(i); e.type = element; e.value = values[int(i)]; return e; });
@@ -100,7 +112,7 @@ FieldNode tree(const pvd::PVField* field, const QString& name, int& budget) {
     const auto& structure = static_cast<const pvd::PVStructure&>(*field);
     n.kind = FieldNode::Structure;
     const auto& names = structure.getStructure()->getFieldNames(); const auto& fields = structure.getPVFields();
-    add(names.size(), [&](size_t i) { return tree(fields[i].get(), QString::fromStdString(names[i]), budget); });
+    add(names.size(), [&](size_t i) { return tree(fields[i].get(), textBudget.copy(names[i]), budget, textBudget); });
     n.value = summary(n);
     break;
   }
@@ -108,22 +120,22 @@ FieldNode tree(const pvd::PVField* field, const QString& name, int& budget) {
     const auto& u = static_cast<const pvd::PVUnion&>(*field);
     n.kind = FieldNode::Union;
     if (auto selected = u.get()) {
-      const auto member = u.getUnion()->isVariant() ? QString("(any)") : QString::fromStdString(u.getSelectedFieldName());
-      add(1, [&](size_t) { return tree(selected.get(), member, budget); });
+      const auto member = u.getUnion()->isVariant() ? QString("(any)") : textBudget.copy(u.getSelectedFieldName());
+      add(1, [&](size_t) { return tree(selected.get(), member, budget, textBudget); });
     } else n.value = "(empty)";
     break;
   }
   case pvd::structureArray: {
     const auto elements = static_cast<const pvd::PVStructureArray&>(*field).view();
     n.kind = FieldNode::StructureArray; n.length = elements.size();
-    add(std::min<size_t>(elements.size(), treeElements), [&](size_t i) { return tree(elements[i].get(), QString("[%1]").arg(i), budget); });
+    add(std::min<size_t>(elements.size(), treeElements), [&](size_t i) { return tree(elements[i].get(), QString("[%1]").arg(i), budget, textBudget); });
     n.omitted = n.length - quint64(n.children.size());
     break;
   }
   case pvd::unionArray: {
     const auto elements = static_cast<const pvd::PVUnionArray&>(*field).view();
     n.kind = FieldNode::UnionArray; n.length = elements.size();
-    add(std::min<size_t>(elements.size(), treeElements), [&](size_t i) { return tree(elements[i].get(), QString("[%1]").arg(i), budget); });
+    add(std::min<size_t>(elements.size(), treeElements), [&](size_t i) { return tree(elements[i].get(), QString("[%1]").arg(i), budget, textBudget); });
     n.omitted = n.length - quint64(n.children.size());
     break;
   }
@@ -134,17 +146,18 @@ FieldNode tree(const pvd::PVField* field, const QString& name, int& budget) {
 double number(const pvd::PVStructure& data, const char* path, double fallback = 0) {
   auto v = data.getSubField<pvd::PVScalar>(path); return v ? v->getAs<double>() : fallback;
 }
-QString text(const pvd::PVStructure& data, const char* path) {
-  auto v = data.getSubField<pvd::PVScalar>(path); return v ? scalarText(*v) : QString();
+QString text(const pvd::PVStructure& data, const char* path, TextBudget& textBudget) {
+  auto v = data.getSubField<pvd::PVScalar>(path); return v ? scalarText(*v, textBudget) : QString();
 }
 Snapshot extract(const pvd::PVStructure& data, int limit) {
+  TextBudget textBudget;
   Snapshot s;
   s.connected = s.readable = s.metadataReady = true;
-  s.structureId = QString::fromStdString(data.getStructure()->getID());
-  s.units = text(data, "display.units"); s.description = text(data, "display.description");
+  s.structureId = textBudget.copy(data.getStructure()->getID());
+  s.units = text(data, "display.units", textBudget); s.description = text(data, "display.description", textBudget);
   s.precision = int(number(data, "display.precision", -1));
   s.severity = int(number(data, "alarm.severity")); s.status = int(number(data, "alarm.status"));
-  s.alarmMessage = text(data, "alarm.message");
+  s.alarmMessage = text(data, "alarm.message", textBudget);
   s.seconds = qint64(number(data, "timeStamp.secondsPastEpoch"));
   s.nanoseconds = int(number(data, "timeStamp.nanoseconds"));
   s.displayLow = number(data, "display.limitLow"); s.displayHigh = number(data, "display.limitHigh");
@@ -153,20 +166,20 @@ Snapshot extract(const pvd::PVStructure& data, int limit) {
   s.alarmLow = number(data, "valueAlarm.lowAlarmLimit", none); s.warningLow = number(data, "valueAlarm.lowWarningLimit", none);
   s.warningHigh = number(data, "valueAlarm.highWarningLimit", none); s.alarmHigh = number(data, "valueAlarm.highAlarmLimit", none);
   int budget = treeFields;
-  auto root = std::make_shared<FieldNode>(tree(&data, {}, budget));
+  auto root = std::make_shared<FieldNode>(tree(&data, {}, budget, textBudget));
   s.structure = std::move(root);
   auto value = data.getSubField("value");
   if (auto scalar = std::dynamic_pointer_cast<const pvd::PVScalar>(value)) {
-    s.type = QString::fromStdString(scalar->getScalar()->getID());
-    s.values << scalarText(*scalar); s.count = 1;
+    s.type = textBudget.copy(scalar->getScalar()->getID());
+    s.values << scalarText(*scalar, textBudget); s.count = 1;
     s.numeric = scalar->getScalar()->getScalarType() != pvd::pvString;
     // QSRV serves string fields through a 39-byte DBR_STRING; a full one may be a longer field cut short.
-    if (!s.numeric && scalar->getAs<std::string>().size() >= 39) s.truncated = true;
+    if (!s.numeric && static_cast<const pvd::PVString&>(*scalar).get().size() >= 39) s.truncated = true;
     if (s.numeric) s.number = scalar->getAs<double>();
   } else if (auto array = std::dynamic_pointer_cast<const pvd::PVScalarArray>(value)) {
-    s.type = QString::fromStdString(array->getScalarArray()->getID());
+    s.type = textBudget.copy(array->getScalarArray()->getID());
     s.array = true; s.count = array->getLength(); s.capacity = array->getCapacity();
-    s.truncated = s.count > quint64(limit); arrayText(*array, s.values, limit);
+    s.truncated = s.count > quint64(limit); arrayText(*array, s.values, limit, textBudget);
     const auto element = array->getScalarArray()->getElementType();
     s.numeric = element != pvd::pvString; s.bytes = element == pvd::pvByte || element == pvd::pvUByte;
     if (s.numeric && !s.values.isEmpty()) s.number = s.values[0].toDouble();
@@ -174,13 +187,13 @@ Snapshot extract(const pvd::PVStructure& data, int limit) {
     s.type = "enum"; s.numeric = true; s.number = index->get(); s.count = 1;
     s.values << QString::number(index->get());
     if (auto choices = data.getSubField<pvd::PVStringArray>("value.choices"))
-      arrayValues<std::string>(*choices, s.choices, 65536);
-  } else s.type = value ? QString::fromStdString(value->getField()->getID()) : "structure (no value field)";
+      arrayValues<std::string>(*choices, s.choices, 65536, textBudget);
+  } else s.type = value ? textBudget.copy(value->getField()->getID()) : "structure (no value field)";
   s.hasValue = true;
   return s;
 }
 struct Event {
-  enum Kind { Connected, Disconnected, Data, Error, PutReady, PutDone, GetDone } kind;
+  enum Kind { Connected, Disconnected, Data, RejectedData, Error, PutReady, PutDone, GetDone } kind;
   bool ok = true;
   QString message;
   Snapshot snapshot;
@@ -206,9 +219,15 @@ struct Inbox {
       const auto skipped = queue.back().snapshot.fields.value("Client coalesced updates").toULongLong() + 1;
       e.snapshot.fields["Client coalesced updates"] = QString::number(skipped);
       queue.back() = std::move(e);
-    // Only errors are dropped at the bound: losing a connection or write event
-    // would leave a stale state or a write pending. Data is bounded by coalescing.
-    } else if (queue.size() < 256 || e.kind != Event::Error) queue.push_back(std::move(e));
+    } else if ((e.kind == Event::Data || e.kind == Event::RejectedData) && !queue.empty() &&
+               (queue.back().kind == Event::Data || queue.back().kind == Event::RejectedData) &&
+               queue.back().epoch == e.epoch) {
+      // Keep only the latest adjacent monitor result, including a rejected one.
+      queue.back() = std::move(e);
+    } else if (queue.size() < 256 || e.kind != Event::Error) {
+      // Dropping a rejected update would leave an older value looking current.
+      queue.push_back(std::move(e));
+    }
     if (notify && wake) wake();
   }
 };
@@ -243,7 +262,7 @@ struct MonitorRequester : pva::MonitorRequester {
     while (auto element = monitor->poll()) {
       Event e(Event::Data); e.epoch = epoch;
       try { e.snapshot = extract(*element->pvStructurePtr, limit); }
-      catch (const std::exception& ex) { e = Event(Event::Error, false, QString::fromLocal8Bit(ex.what())); e.epoch = epoch; }
+      catch (const std::exception& ex) { e = Event(Event::RejectedData, false, QString::fromLocal8Bit(ex.what())); e.epoch = epoch; }
       monitor->release(element); inbox->post(std::move(e));
     }
   }
@@ -310,6 +329,7 @@ class Pva final : public Connection {
   int limit;
   quint64 epoch = 0, sequence = 0;
   Snapshot s;
+  bool putWritable = false;
   std::shared_ptr<Inbox> inbox = std::make_shared<Inbox>();
   pva::ChannelProvider::shared_pointer provider;
   pva::Channel::shared_pointer channel;
@@ -329,7 +349,7 @@ class Pva final : public Connection {
   } check;
   void clearOperations() {
     ++epoch;
-    putStructure.reset(); check = {};
+    putStructure.reset(); check = {}; putWritable = false;
     if (monitor) monitor->destroy();
     monitor.reset(); monitorRequester.reset();
     if (put) put->destroy();
@@ -380,9 +400,16 @@ public:
         break;
       case Event::Data: {
         auto incoming = std::move(e.snapshot);
-        incoming.host = s.host; incoming.writable = s.writable;
+        incoming.host = s.host; incoming.writable = putWritable;
         incoming.name = address.name; incoming.provider = "pva"; incoming.sequence = ++sequence;
         s = std::move(incoming); break;
+      }
+      case Event::RejectedData: {
+        Snapshot rejected;
+        rejected.name = address.name; rejected.provider = "pva"; rejected.host = s.host;
+        rejected.connected = s.connected; rejected.readable = s.readable;
+        rejected.error = e.message;
+        s = std::move(rejected); break;
       }
       case Event::PutReady:
         if (e.ok && e.structure) {
@@ -391,8 +418,9 @@ public:
           auto value = data->getSubField("value");
           // Only an NTEnum-style int index is writable, as extract() shows it as an enum.
           if (value && value->getField()->getType() == pvd::structure) value = data->getSubField<pvd::PVInt>("value.index");
-          s.writable = value && (value->getField()->getType() == pvd::scalar || value->getField()->getType() == pvd::scalarArray) && channel->getAccessRights(value) == pva::readWrite;
-        } else { s.writable = false; s.fields["Write setup"] = e.message; }
+          putWritable = value && (value->getField()->getType() == pvd::scalar || value->getField()->getType() == pvd::scalarArray) && channel->getAccessRights(value) == pva::readWrite;
+          s.writable = putWritable && s.hasValue;
+        } else { putWritable = s.writable = false; s.fields["Write setup"] = e.message; }
         break;
       case Event::PutDone:
         if (e.ok && check.active && put) { put->get(); break; }

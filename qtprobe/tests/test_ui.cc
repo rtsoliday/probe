@@ -169,6 +169,29 @@ private slots:
     bad.write("{\"version\":1,\"pvs\":[\"ca://Good\",\"bad name\"]}"); bad.close();
     QVERIFY_THROWS_EXCEPTION(std::runtime_error, restored.loadSession(bad.fileName()));
     QCOMPARE(restored.inspectors()->count(), 2);
+    const auto loadError = [&](const QString& file) {
+      try { restored.loadSession(file); return QString(); }
+      catch (const std::runtime_error& e) { return QString::fromLocal8Bit(e.what()); }
+    };
+    QFile oversized(dir.filePath("oversized.qtp")); QVERIFY(oversized.open(QIODevice::WriteOnly));
+    QVERIFY(oversized.resize(4LL * 1024 * 1024 + 1)); oversized.close();
+    QCOMPARE(loadError(oversized.fileName()), QString("Session exceeds 4 MiB"));
+    QCOMPARE(restored.inspectors()->count(), 2);
+    QJsonArray tooMany;
+    for (int i = 0; i < 100; ++i) tooMany.append(QString("ca://QtProbe:UI:%1").arg(i));
+    tooMany.append("bad name");
+    QFile many(dir.filePath("many.qtp")); QVERIFY(many.open(QIODevice::WriteOnly));
+    QVERIFY(many.write(QJsonDocument(QJsonObject{{"version", 1}, {"pvs", tooMany}}).toJson()) > 0); many.close();
+    QCOMPARE(loadError(many.fileName()), QString("Session exceeds 100 PVs"));
+    QCOMPARE(restored.inspectors()->count(), 2);
+    // A workspace that would serialize beyond the load limit must not create
+    // a session that QtProbe cannot reopen.
+    Window large(o); large.addPv("ca://QtProbe:UI:Large");
+    QCOMPARE(large.inspectors()->count(), 1);
+    inspectorAt(large, 0)->channel()->snapshot.name = QString(4 * 1024 * 1024, 'x');
+    const auto largePath = dir.filePath("saved-oversized.qtp");
+    QVERIFY_THROWS_EXCEPTION(std::runtime_error, large.saveSession(largePath));
+    QVERIFY(!QFileInfo::exists(largePath));
   }
   void workspaceNavigationEmptyStateAndExactReadback() {
     Options options; options.connectOnOpen = false; Window window(options); window.show();

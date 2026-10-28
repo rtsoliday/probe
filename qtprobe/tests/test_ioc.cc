@@ -137,6 +137,7 @@ private slots:
       QCOMPARE(a.snapshot.values, (QStringList{"1", "2.5", "-3", "4"}));
       Channel capped({prefix + "array", provider}, false, 2); capped.start();
       QTRY_VERIFY(capped.snapshot.hasValue); QCOMPARE(capped.snapshot.values.size(), 2); QVERIFY(capped.snapshot.truncated);
+      QCOMPARE(capped.snapshot.count, provider == "ca" ? quint64(2) : quint64(4));
     }
   }
   void embeddedNulWritesAreRejected() {

@@ -40,6 +40,7 @@ class Ca final : public Connection {
   evid monitor = nullptr, properties = nullptr;
   // Request types of the subscriptions above; CA keeps them across reconnects.
   long monitorType = -1, propertiesType = -1;
+  unsigned long monitorCount = 0;
   struct Extra { Ca* owner; QString field; chid id = nullptr; evid monitor = nullptr; };
   std::vector<std::unique_ptr<Extra>> extras;
   Snapshot s;
@@ -82,7 +83,10 @@ class Ca final : public Connection {
     // The PV may return with another native type (a changed record); the
     // server would convert values to the old request type, so resubscribe.
     const long valueType = dbf_type_to_DBR_TIME(native), metaType = native == DBF_STRING ? -1 : native == DBF_ENUM ? DBR_CTRL_ENUM : DBR_CTRL_DOUBLE;
-    if (c->monitor && c->monitorType != valueType) { ca_clear_subscription(c->monitor); c->monitor = nullptr; }
+    // Count zero preserves the IOC's actual length for ordinary arrays. Large
+    // arrays need an explicit request count so CA does not transfer the rest.
+    const auto valueCount = s.capacity > quint64(c->limit) ? static_cast<unsigned long>(c->limit) : 0UL;
+    if (c->monitor && (c->monitorType != valueType || c->monitorCount != valueCount)) { ca_clear_subscription(c->monitor); c->monitor = nullptr; }
     if (c->properties && c->propertiesType != metaType) { ca_clear_subscription(c->properties); c->properties = nullptr; }
     if (native == DBF_STRING) s.metadataReady = true;
     else {
@@ -93,8 +97,9 @@ class Ca final : public Connection {
       }
     }
     if (!c->monitor) {
-      c->fail(ca_create_subscription(valueType, 0, a.chid, DBE_VALUE | DBE_ALARM, value, c, &c->monitor));
+      c->fail(ca_create_subscription(valueType, valueCount, a.chid, DBE_VALUE | DBE_ALARM, value, c, &c->monitor));
       c->monitorType = valueType;
+      c->monitorCount = valueCount;
     }
     ca_flush_io();
   }
@@ -149,7 +154,10 @@ class Ca final : public Connection {
     if (a.status != ECA_NORMAL || !a.dbr) { c->fail(a.status); return; }
     auto& s = c->s;
     s.values.clear(); const long count = std::min<long>(a.count, c->limit);
-    s.count = a.count; s.truncated = a.count > c->limit;
+    s.count = a.count;
+    // A capped CA response cannot reveal whether the live array has more
+    // elements when the received count reaches the requested count.
+    s.truncated = a.count > c->limit || (c->monitorCount && a.count >= long(c->monitorCount));
     switch (a.type) {
 #define EXTRACT(TYPE, STRUCT) case TYPE: extract(c, *static_cast<const STRUCT*>(a.dbr), count); break
     EXTRACT(DBR_TIME_STRING, dbr_time_string);
@@ -271,7 +279,8 @@ public:
   void detach() override { closing = true; }
   void refetch() override {
     if (!id || ca_state(id) != cs_conn) return;
-    fail(ca_array_get_callback(dbf_type_to_DBR_TIME(ca_field_type(id)), 0, id, value, this)); ca_flush_io();
+    const auto count = ca_element_count(id) > static_cast<unsigned long>(limit) ? static_cast<unsigned long>(limit) : 0UL;
+    fail(ca_array_get_callback(dbf_type_to_DBR_TIME(ca_field_type(id)), count, id, value, this)); ca_flush_io();
   }
   void process() override {
     if (!procId || ca_state(procId) != cs_conn || !ca_write_access(procId))
