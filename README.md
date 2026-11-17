@@ -1,12 +1,14 @@
 # Probe and QtProbe
 
-This fork preserves the original Motif Probe in `probe/` and adds **QtProbe 0.1.0**,
+This fork preserves the original Motif Probe in `probe/` and adds **QtProbe 1.0.0**,
 a C++17 Qt 5.15/Qt 6 PV inspector in `qtprobe/`, following the layout and build
 conventions of QtEDM, QtALH and Qt StripTool.
 
 QtProbe supports Channel Access and native pvAccess, enum and numeric
 adjustments, arrays, searchable metadata, local history and plots, JSON/CSV
 export, optional SDDS history/array/snapshot export, sessions and a display-free `--info` command.
+
+[QtProbe 1.0.0 release notes](docs/site/project/release-notes.md)
 
 ## Feature highlights
 

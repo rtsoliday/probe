@@ -1,4 +1,5 @@
 #include "inspector.h"
+#include "version.h"
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QFile>
@@ -54,7 +55,7 @@ int main(int argc, char** argv) {
   // (pvData puts, CA environment settings), so keep C numeric conventions.
   std::setlocale(LC_NUMERIC, "C");
   QCoreApplication::setApplicationName("qtprobe");
-  QCoreApplication::setApplicationVersion("0.1.0");
+  QCoreApplication::setApplicationVersion(kQtProbeVersion);
   QCoreApplication::setOrganizationName("EPICS");
   QCommandLineParser parser;
   parser.setApplicationDescription("QtProbe — EPICS Channel Access and pvAccess inspector");

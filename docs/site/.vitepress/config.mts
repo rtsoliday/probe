@@ -46,6 +46,7 @@ export default defineConfig({
         { text: 'Compatibility & current limits', link: '/understand/compatibility' }
       ]},
       { text: 'PROJECT & DEVELOPMENT', collapsed: true, items: [
+        { text: 'Release notes', link: '/project/release-notes' },
         { text: 'Performance measurements', link: '/understand/performance' },
         { text: 'Tests', link: '/develop/testing' },
         { text: 'Maintain these docs', link: '/develop/documentation' },

@@ -1,6 +1,7 @@
 // Help browser adapted from the companion Qt StripTool port. See ../LICENSE.
 #include "help.h"
 #include "about_banner.h"
+#include "version.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QAction>
@@ -432,7 +433,7 @@ void showAbout(QWidget* parent) {
   auto font = title->font(); font.setPointSizeF(font.pointSizeF() > 0 ? font.pointSizeF() * 1.7 : 18);
   font.setBold(true); title->setFont(font); layout->addWidget(title);
   const auto version = QCoreApplication::applicationVersion().isEmpty()
-      ? QString("0.1.0") : QCoreApplication::applicationVersion();
+      ? QString(kQtProbeVersion) : QCoreApplication::applicationVersion();
   auto* subtitle = new QLabel(QObject::tr("Version %1 · EPICS Process Variable Inspector").arg(version), &dialog);
   subtitle->setObjectName("aboutSubtitle"); subtitle->setWordWrap(true); layout->addWidget(subtitle);
   auto* credits = new QTextBrowser(&dialog);

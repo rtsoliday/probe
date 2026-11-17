@@ -9,6 +9,8 @@ description: Build QtProbe, inspect CA and PVA variables, and find the operator 
 
 <p class="doc-intro">Inspect live EPICS values, follow local trends, explore record diagnostics and browse native pvAccess structures.</p>
 
+[QtProbe 1.0.0 release notes](./project/release-notes)
+
 <div class="doc-paths">
   <a class="doc-path" href="./get-started/first-run.html"><span class="path-number">01 / LEARN</span><strong>Inspect your first PV →</strong><span>Add a channel and find its value, units and alarm state.</span></a>
   <a class="doc-path" href="./operate/workspace.html"><span class="path-number">02 / OPERATE</span><strong>Explore the workspace →</strong><span>Use the All table, inspector sections and appearance controls.</span></a>

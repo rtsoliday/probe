@@ -1040,7 +1040,7 @@ private slots:
     QFile manual(capture.urls.back().toLocalFile()); QVERIFY(manual.open(QIODevice::ReadOnly));
     const auto html = manual.readAll();
     QVERIFY(html.contains("QtProbe User Manual")); QVERIFY(html.contains("pvAccess"));
-    QVERIFY(html.contains("QtProbe 0.1.0"));
+    QVERIFY(html.contains("QtProbe 1.0.0"));
     QVERIFY(html.contains("name=\"keyboard-shortcuts\"")); QVERIFY(html.contains("QTPROBE_HELP_PATH"));
     qputenv("QTPROBE_HELP_PATH", "https://example.org/manuals/QtProbe/");
     QCOMPARE(helpManualUrl(), QUrl("https://example.org/manuals/QtProbe/"));
@@ -1065,7 +1065,7 @@ private slots:
     });
     window.findChild<QAction*>("aboutAction")->trigger();
     QCOMPARE(title, QString("QtProbe"));
-    QVERIFY(subtitle.contains("Version 0.1.0"));
+    QVERIFY(subtitle.contains("Version 1.0.0"));
     for (auto name : {"Robert Soliday", "Fred Vong", "Ken Evans"}) QVERIFY(credits.contains(name));
     QVERIFY(footer.contains(qVersion())); QVERIFY(footer.contains("EPICS")); QVERIFY(animated); QVERIFY(saved);
     auto* help = window.findChild<QDialog*>("helpWindow"); QVERIFY(help && help->isVisible());

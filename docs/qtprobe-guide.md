@@ -2,7 +2,7 @@
 
 ## Getting started
 
-QtProbe 0.1.0 inspects EPICS process variables over Channel Access (CA) and pvAccess
+QtProbe 1.0.0 inspects EPICS process variables over Channel Access (CA) and pvAccess
 (PVA). Enter a name and press **Add** or Enter. Plain names use the selected
 provider (CA initially). `ca://` and `pva://` prefixes always override it.
 Type or paste several names separated by spaces or new lines to add them all.
@@ -632,8 +632,13 @@ arrays keep the numeric view. PVA unions and
 structure arrays can be browsed in Structure but are not editable. PVA writes do not request
 record processing beyond the server's normal put behavior.
 
-Validated for 0.1.0: Linux x86_64 with GCC 11, Qt 5.15 and EPICS Base 7.0.8
-(CA+PVA and CA-only builds, full test suite). Native Windows x64 with MSVC and
+QtProbe 1.0.0 was validated on Linux x86_64 with GCC 11.3, Qt 5.15.9 and
+EPICS Base 7.0.8, with CA, PVA and SDDS enabled. The core, offscreen UI,
+SDDS and loopback IOC suites passed, as did the QtEDM and Motif X11
+drag-and-drop tests.
+
+The 0.1.0 Linux validation also covered CA-only builds with the full test suite.
+Native Windows x64 with MSVC and
 Qt 6.11.2, including CA and PVA, was validated on a 0.1.0 pre-release, where
 macOS with Qt 6 also built without warnings; no macOS test results are
 recorded. Other combinations are expected to work

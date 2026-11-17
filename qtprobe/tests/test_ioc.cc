@@ -358,9 +358,9 @@ private slots:
     for (const char* option : {"-help", "-version"}) {
       process.start(exe, {option}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitStatus(), QProcess::NormalExit); QCOMPARE(process.exitCode(), 0);
     }
-    // The shipped version (main.cc) must match the About fallback and guide checked in test_ui.
+    // The CLI version must match the About fallback and guide checked in test_ui.
     process.start(exe, {"--version"}); QVERIFY(process.waitForFinished(5000));
-    QCOMPARE(process.readAllStandardOutput().trimmed(), QByteArray("qtprobe 0.1.0"));
+    QCOMPARE(process.readAllStandardOutput().trimmed(), QByteArray("qtprobe 1.0.0"));
     process.setProcessEnvironment(env);
     process.start(exe, {"--info", "--no-such-option", prefix + "number"}); QVERIFY(process.waitForFinished(5000)); QCOMPARE(process.exitCode(), 2);
     QVERIFY(process.readAllStandardError().contains("no-such-option"));
